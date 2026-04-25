@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Sign in to OneDrive — PiFrame{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6">
+    <div class="card text-center">
+      <div class="card-body p-5">
+        <h4 class="mb-4"><i class="bi bi-cloud-arrow-up"></i> Sign in to OneDrive</h4>
+        <p class="lead">On any device, go to:</p>
+        <a href="{{ verification_uri }}" target="_blank"
+           class="btn btn-outline-primary mb-3">
+          {{ verification_uri }} ↗
+        </a>
+        <p class="mt-2 mb-1">Enter this code:</p>
+        <div class="display-5 fw-bold font-monospace mb-4 p-3 border rounded">
+          {{ user_code }}
+        </div>
+        <p class="text-secondary small mb-4">{{ message }}</p>
+
+        <div id="poll-status" class="text-secondary small mb-3">
+          Waiting for authentication…
+          <span class="spinner-border spinner-border-sm ms-2"></span>
+        </div>
+        <a href="/onedrive" class="btn btn-outline-secondary btn-sm">Cancel</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function poll() {
+    const r = await fetch('/onedrive/poll-auth', {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('poll-status').innerHTML =
+        '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Authenticated! Redirecting…</span>';
+      setTimeout(() => window.location.href = '/onedrive', 1500);
+    } else {
+      setTimeout(poll, 5000);
+    }
+  }
+  setTimeout(poll, 5000);
+</script>
+{% endblock %}

@@ -1,0 +1,145 @@
+# PiFrame Configuration
+# Edit here or use the web UI at http://<pi-ip>:8080/settings
+
+# ── Display ──────────────────────────────────────────────────────────────────
+display:
+  # "hdmi" or "eink"
+  mode: hdmi
+
+  hdmi:
+    width: 1920
+    height: 1080
+    fullscreen: true
+    # Screen rotation in degrees: 0, 90, 180, 270
+    rotation: 0
+    # Color shown behind letterboxed images (R, G, B)
+    background_color: [0, 0, 0]
+    # Cursor hidden while slideshow runs
+    hide_cursor: true
+
+  eink:
+    # Inky Impression model: "7.3" or "5.7"
+    model: "7.3"
+    # Rotation: 0 or 180
+    rotation: 0
+    # Colour saturation (0.0–1.0). Higher = more vivid, slower refresh.
+    saturation: 0.5
+
+# ── Slideshow ─────────────────────────────────────────────────────────────────
+slideshow:
+  # Folder where photos are stored (local cache, also used by OneDrive sync)
+  photo_dir: photos
+
+  # Seconds each photo is shown. For e-ink, use 300+ (5 minutes).
+  interval: 60
+
+  # Randomise display order
+  shuffle: true
+
+  # Transition between photos: "fade" (HDMI only), "cut"
+  transition: fade
+
+  # How to fit photos to the screen:
+  #   fill    – zoom to fill, crop edges
+  #   fit     – letterbox / pillarbox with background colour
+  #   stretch – distort to fill exactly
+  #   center  – show at original size, crop if too big
+  fit_mode: fill
+
+  # Include photos in sub-folders
+  recursive: true
+
+  # Supported file extensions (lowercase)
+  supported_formats: [jpg, jpeg, png, bmp, gif, webp]
+
+# ── OneDrive Sync ─────────────────────────────────────────────────────────────
+onedrive:
+  enabled: false
+
+  # Azure AD application (client) ID.
+  # Register a free app at https://portal.azure.com → App registrations.
+  # Add a Mobile/Desktop redirect URI: https://login.microsoftonline.com/common/oauth2/nativeclient
+  # Grant delegated permission: Files.Read
+  client_id: ""
+
+  # Path inside OneDrive to sync photos from (e.g. /Pictures/PiFrame)
+  folder_path: /Pictures/PiFrame
+
+  # Also sync sub-folders inside the OneDrive folder
+  sync_subfolders: false
+
+  # How often to check for new photos (seconds)
+  sync_interval: 3600
+
+  # Remove local files that were deleted from OneDrive
+  delete_local_removed: false
+
+  # Where to cache the auth token (keep this private)
+  token_file: .piframe_token.json
+
+# ── Overlays ──────────────────────────────────────────────────────────────────
+# Positions: top-left | top-center | top-right
+#            bottom-left | bottom-center | bottom-right
+
+overlays:
+
+  clock:
+    enabled: false
+    position: bottom-right
+    # strftime format string
+    time_format: "%-H:%M"
+    show_date: true
+    date_format: "%A, %-d %B"
+    font_size: 52
+    # Colour as [R, G, B] or a CSS name ("white", "black")
+    color: [255, 255, 255]
+    # Drop-shadow for readability over light backgrounds
+    shadow: true
+    # Subtle dark backing pill behind the text
+    background: true
+    background_opacity: 120   # 0–255
+
+  weather:
+    enabled: false
+    # OpenWeatherMap free API key: https://openweathermap.org/api
+    api_key: ""
+    # City name or "lat,lon" (e.g. "51.5074,-0.1278")
+    location: ""
+    # "metric" (°C) or "imperial" (°F)
+    units: metric
+    position: bottom-left
+    show_icon: true
+    font_size: 40
+    color: [255, 255, 255]
+    shadow: true
+    background: true
+    background_opacity: 120
+    # Seconds between weather API calls (min 600 to stay within free tier)
+    update_interval: 1800
+
+  photo_info:
+    enabled: false
+    show_filename: false
+    show_date_taken: true
+    position: bottom-center
+    font_size: 30
+    color: [220, 220, 220]
+    shadow: true
+
+# ── Schedule ──────────────────────────────────────────────────────────────────
+schedule:
+  enabled: false
+  on_time: "07:00"
+  off_time: "22:00"
+  # "blank" – show black screen | "off" – turn off HDMI via vcgencmd (Pi only)
+  off_action: blank
+
+# ── Web UI ────────────────────────────────────────────────────────────────────
+web:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+  # Optional password to protect the web UI (leave blank to disable)
+  password: ""
+  # Secret key for Flask sessions — change this to something random!
+  secret_key: "change-me-please"
