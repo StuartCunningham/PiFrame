@@ -1,0 +1,455 @@
+{% extends "base.html" %}
+{% block title %}Settings — PiFrame{% endblock %}
+
+{% block content %}
+<form method="post" action="/settings">
+
+<!-- Tab navigation -->
+<ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
+  {% for tab_id, label, icon in [
+      ('slideshow', 'Slideshow', 'bi-images'),
+      ('display',   'Display',   'bi-display'),
+      ('schedule',  'Schedule',  'bi-clock'),
+      ('overlays',  'Overlays',  'bi-layers'),
+      ('onedrive',  'OneDrive',  'bi-cloud'),
+      ('system',    'System',    'bi-gear'),
+  ] %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link {% if loop.first %}active{% endif %}"
+            id="tab-{{ tab_id }}" data-bs-toggle="tab"
+            data-bs-target="#pane-{{ tab_id }}" type="button" role="tab">
+      <i class="bi {{ icon }}"></i>
+      <span class="d-none d-sm-inline ms-1">{{ label }}</span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+
+<div class="tab-content">
+
+  <!-- ── Slideshow ───────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade show active" id="pane-slideshow">
+    <div class="card">
+      <div class="card-body row g-3">
+
+        <div class="col-12 col-md-6">
+          <label class="form-label">Photo folder</label>
+          <input class="form-control" type="text" name="photo_dir"
+                 value="{{ config.slideshow.photo_dir }}">
+          <div class="form-text">Path on the Pi, relative or absolute.</div>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Interval (seconds)</label>
+          <input class="form-control" type="number" name="interval" min="5" max="86400"
+                 value="{{ config.slideshow.interval }}">
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Fit mode</label>
+          <select class="form-select" name="fit_mode">
+            {% for m in ['fill', 'fit', 'stretch', 'center'] %}
+            <option value="{{ m }}" {% if config.slideshow.fit_mode == m %}selected{% endif %}>
+              {{ m|capitalize }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Transition</label>
+          <select class="form-select" name="transition">
+            <option value="fade" {% if config.slideshow.transition == 'fade' %}selected{% endif %}>Fade (HDMI)</option>
+            <option value="cut"  {% if config.slideshow.transition == 'cut'  %}selected{% endif %}>Cut</option>
+          </select>
+        </div>
+
+        <div class="col-6 col-md-3 d-flex align-items-end gap-4">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="shuffle" name="shuffle"
+                   {% if config.slideshow.shuffle %}checked{% endif %}>
+            <label class="form-check-label" for="shuffle">Shuffle</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="recursive" name="recursive"
+                   {% if config.slideshow.recursive %}checked{% endif %}>
+            <label class="form-check-label" for="recursive">Sub-folders</label>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Display ─────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="pane-display">
+    <div class="card">
+      <div class="card-body row g-3">
+
+        <div class="col-12">
+          <label class="form-label fw-semibold">Output type</label>
+          <div class="d-flex gap-4">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="display_mode" value="hdmi"
+                     id="mode_hdmi" {% if config.display.mode == 'hdmi' %}checked{% endif %}>
+              <label class="form-check-label" for="mode_hdmi">HDMI monitor</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="display_mode" value="eink"
+                     id="mode_eink" {% if config.display.mode == 'eink' %}checked{% endif %}>
+              <label class="form-check-label" for="mode_eink">Inky Impression (e-ink)</label>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-1">
+        <h6 class="text-secondary">HDMI settings</h6>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Width (px)</label>
+          <input class="form-control" type="number" name="hdmi_width"
+                 value="{{ config.display.hdmi.width }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Height (px)</label>
+          <input class="form-control" type="number" name="hdmi_height"
+                 value="{{ config.display.hdmi.height }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Rotation</label>
+          <select class="form-select" name="hdmi_rotation">
+            {% for r in [0, 90, 180, 270] %}
+            <option value="{{ r }}" {% if config.display.hdmi.rotation == r %}selected{% endif %}>{{ r }}°</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Background colour</label>
+          {% set bg = config.display.hdmi.background_color %}
+          <input class="form-control form-control-color" type="color" name="hdmi_bg_color"
+                 value="#{{ '%02x%02x%02x' % (bg[0], bg[1], bg[2]) }}">
+        </div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="hdmi_fullscreen"
+                   name="hdmi_fullscreen"
+                   {% if config.display.hdmi.fullscreen %}checked{% endif %}>
+            <label class="form-check-label" for="hdmi_fullscreen">Fullscreen</label>
+          </div>
+        </div>
+
+        <hr class="my-1">
+        <h6 class="text-secondary">E-ink (Inky Impression) settings</h6>
+
+        <div class="col-6 col-md-3">
+          <label class="form-label">Model</label>
+          <select class="form-select" name="eink_model">
+            <option value="7.3" {% if config.display.eink.model == '7.3' %}selected{% endif %}>7.3″ (800×480)</option>
+            <option value="5.7" {% if config.display.eink.model == '5.7' %}selected{% endif %}>5.7″ (600×448)</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Rotation</label>
+          <select class="form-select" name="eink_rotation">
+            <option value="0"   {% if config.display.eink.rotation == 0   %}selected{% endif %}>0°</option>
+            <option value="180" {% if config.display.eink.rotation == 180 %}selected{% endif %}>180°</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-4">
+          <label class="form-label">Colour saturation
+            <span class="text-secondary">({{ config.display.eink.saturation }})</span></label>
+          <input class="form-range" type="range" name="eink_saturation"
+                 min="0" max="1" step="0.05"
+                 value="{{ config.display.eink.saturation }}"
+                 oninput="this.previousElementSibling.querySelector('span').textContent='('+this.value+')'">
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Schedule ────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="pane-schedule">
+    <div class="card">
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="schedule_enabled"
+                   name="schedule_enabled"
+                   {% if config.schedule.enabled %}checked{% endif %}>
+            <label class="form-check-label" for="schedule_enabled">
+              Enable display schedule
+            </label>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">On time</label>
+          <input class="form-control" type="time" name="schedule_on"
+                 value="{{ config.schedule.on_time }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Off time</label>
+          <input class="form-control" type="time" name="schedule_off"
+                 value="{{ config.schedule.off_time }}">
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">When off</label>
+          <select class="form-select" name="schedule_off_action">
+            <option value="blank" {% if config.schedule.off_action == 'blank' %}selected{% endif %}>
+              Black screen
+            </option>
+            <option value="off" {% if config.schedule.off_action == 'off' %}selected{% endif %}>
+              HDMI off (Pi only)
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Overlays ─────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="pane-overlays">
+
+    {% set positions = ['top-left','top-center','top-right','bottom-left','bottom-center','bottom-right'] %}
+
+    <!-- Clock -->
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-3">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="clock_enabled"
+                 name="clock_enabled"
+                 {% if config.overlays.clock.enabled %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="clock_enabled">Clock</label>
+        </div>
+      </div>
+      <div class="card-body row g-3">
+        <div class="col-6 col-md-3">
+          <label class="form-label">Position</label>
+          <select class="form-select" name="clock_position">
+            {% for p in positions %}
+            <option value="{{ p }}" {% if config.overlays.clock.position == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font size</label>
+          <input class="form-control" type="number" name="clock_font_size" min="12" max="120"
+                 value="{{ config.overlays.clock.font_size }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Time format</label>
+          <input class="form-control font-monospace" type="text" name="clock_time_format"
+                 value="{{ config.overlays.clock.time_format }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Text colour</label>
+          {% set c = config.overlays.clock.color %}
+          <input class="form-control form-control-color" type="color" name="clock_color"
+                 value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Date format <span class="text-secondary">(leave blank to hide)</span></label>
+          <input class="form-control font-monospace" type="text" name="clock_date_format"
+                 value="{{ config.overlays.clock.date_format }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Background opacity</label>
+          <input class="form-control" type="number" name="clock_bg_opacity" min="0" max="255"
+                 value="{{ config.overlays.clock.background_opacity }}">
+        </div>
+        <div class="col-12 d-flex gap-4 flex-wrap">
+          {% for field, label in [('clock_show_date','Show date'),('clock_shadow','Drop shadow'),('clock_background','Background pill')] %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="{{ field }}" name="{{ field }}"
+                   {% if config.overlays.clock.get(field.replace('clock_','')) %}checked{% endif %}>
+            <label class="form-check-label" for="{{ field }}">{{ label }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Weather -->
+    <div class="card mb-3">
+      <div class="card-header d-flex align-items-center gap-3">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="weather_enabled"
+                 name="weather_enabled"
+                 {% if config.overlays.weather.enabled %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="weather_enabled">Weather</label>
+        </div>
+      </div>
+      <div class="card-body row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label">OpenWeatherMap API key</label>
+          <input class="form-control font-monospace" type="text" name="weather_api_key"
+                 value="{{ config.overlays.weather.api_key }}"
+                 placeholder="Get a free key at openweathermap.org">
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Location</label>
+          <input class="form-control" type="text" name="weather_location"
+                 value="{{ config.overlays.weather.location }}"
+                 placeholder="London or 51.5074,-0.1278">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Units</label>
+          <select class="form-select" name="weather_units">
+            <option value="metric"   {% if config.overlays.weather.units == 'metric'   %}selected{% endif %}>°C</option>
+            <option value="imperial" {% if config.overlays.weather.units == 'imperial' %}selected{% endif %}>°F</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Position</label>
+          <select class="form-select" name="weather_position">
+            {% for p in positions %}
+            <option value="{{ p }}" {% if config.overlays.weather.position == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font size</label>
+          <input class="form-control" type="number" name="weather_font_size" min="12" max="120"
+                 value="{{ config.overlays.weather.font_size }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Update (seconds)</label>
+          <input class="form-control" type="number" name="weather_update_interval" min="600"
+                 value="{{ config.overlays.weather.update_interval }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Text colour</label>
+          {% set c = config.overlays.weather.color %}
+          <input class="form-control form-control-color" type="color" name="weather_color"
+                 value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- Photo info -->
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-3">
+        <div class="form-check form-switch mb-0">
+          <input class="form-check-input" type="checkbox" id="info_enabled"
+                 name="info_enabled"
+                 {% if config.overlays.photo_info.enabled %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="info_enabled">Photo info</label>
+        </div>
+      </div>
+      <div class="card-body row g-3">
+        <div class="col-6 col-md-3">
+          <label class="form-label">Position</label>
+          <select class="form-select" name="info_position">
+            {% for p in positions %}
+            <option value="{{ p }}" {% if config.overlays.photo_info.position == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font size</label>
+          <input class="form-control" type="number" name="info_font_size" min="12" max="80"
+                 value="{{ config.overlays.photo_info.font_size }}">
+        </div>
+        <div class="col-12 d-flex gap-4 flex-wrap">
+          {% for field, label in [('info_show_date','Date taken (EXIF)'),('info_show_filename','Filename'),('info_shadow','Drop shadow')] %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="{{ field }}" name="{{ field }}"
+                   {% if field == 'info_show_date' and config.overlays.photo_info.show_date_taken %}checked
+                   {% elif field == 'info_show_filename' and config.overlays.photo_info.show_filename %}checked
+                   {% elif field == 'info_shadow' and config.overlays.photo_info.shadow %}checked{% endif %}>
+            <label class="form-check-label" for="{{ field }}">{{ label }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /overlays pane -->
+
+  <!-- ── OneDrive ─────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="pane-onedrive">
+    <div class="card">
+      <div class="card-body row g-3">
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="onedrive_enabled"
+                   name="onedrive_enabled"
+                   {% if config.onedrive.enabled %}checked{% endif %}>
+            <label class="form-check-label fw-semibold" for="onedrive_enabled">Enable OneDrive sync</label>
+          </div>
+        </div>
+        <div class="col-12 col-md-8">
+          <label class="form-label">Azure App (client) ID
+            <a href="https://portal.azure.com" target="_blank" class="ms-2 small">portal.azure.com ↗</a>
+          </label>
+          <input class="form-control font-monospace" type="text" name="onedrive_client_id"
+                 value="{{ config.onedrive.client_id }}"
+                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">OneDrive folder path</label>
+          <input class="form-control" type="text" name="onedrive_folder"
+                 value="{{ config.onedrive.folder_path }}"
+                 placeholder="/Pictures/PiFrame">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Sync interval (seconds)</label>
+          <input class="form-control" type="number" name="onedrive_sync_interval" min="60"
+                 value="{{ config.onedrive.sync_interval }}">
+        </div>
+        <div class="col-12 d-flex gap-4 flex-wrap">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="onedrive_sync_subfolders"
+                   name="onedrive_sync_subfolders"
+                   {% if config.onedrive.sync_subfolders %}checked{% endif %}>
+            <label class="form-check-label" for="onedrive_sync_subfolders">Sync sub-folders</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="onedrive_delete_removed"
+                   name="onedrive_delete_removed"
+                   {% if config.onedrive.delete_local_removed %}checked{% endif %}>
+            <label class="form-check-label" for="onedrive_delete_removed">
+              Delete local files removed from OneDrive
+            </label>
+          </div>
+        </div>
+        <div class="col-12 mt-2">
+          <a href="/onedrive" class="btn btn-outline-info btn-sm">
+            <i class="bi bi-cloud-check"></i> Manage OneDrive authentication →
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── System ───────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="pane-system">
+    <div class="card">
+      <div class="card-body row g-3">
+        <div class="col-6 col-md-3">
+          <label class="form-label">Web UI port</label>
+          <input class="form-control" type="number" name="web_port" min="1024" max="65535"
+                 value="{{ config.web.port }}">
+          <div class="form-text">Restart required to take effect.</div>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label">Web UI password <span class="text-secondary">(blank = no login)</span></label>
+          <input class="form-control" type="password" name="web_password"
+                 value="{{ config.web.password }}"
+                 autocomplete="new-password">
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tab-content -->
+
+<div class="mt-4 d-flex gap-3">
+  <button type="submit" class="btn btn-primary px-4">
+    <i class="bi bi-floppy"></i> Save settings
+  </button>
+  <a href="/" class="btn btn-outline-secondary">Cancel</a>
+</div>
+
+</form>
+{% endblock %}

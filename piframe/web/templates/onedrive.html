@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}OneDrive — PiFrame{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-cloud"></i> OneDrive Authentication</div>
+      <div class="card-body">
+        {% if not config.onedrive.enabled %}
+          <div class="alert alert-warning mb-3">
+            OneDrive is disabled. Enable it in
+            <a href="/settings#pane-onedrive">Settings → OneDrive</a>.
+          </div>
+        {% elif not config.onedrive.client_id %}
+          <div class="alert alert-warning mb-3">
+            No Azure App client ID configured. See
+            <a href="/settings#pane-onedrive">Settings → OneDrive</a>.
+          </div>
+        {% elif state.onedrive_authenticated %}
+          <div class="alert alert-success mb-3">
+            <i class="bi bi-check-circle-fill"></i> Signed in to OneDrive.
+          </div>
+          <div class="d-flex gap-3">
+            <form method="post" action="/onedrive/sync-now">
+              <button class="btn btn-primary">
+                <i class="bi bi-cloud-download"></i> Sync now
+              </button>
+            </form>
+            <form method="post" action="/onedrive/revoke"
+                  onsubmit="return confirm('Sign out of OneDrive?')">
+              <button class="btn btn-outline-danger">
+                <i class="bi bi-box-arrow-right"></i> Sign out
+              </button>
+            </form>
+          </div>
+        {% else %}
+          <p class="text-secondary mb-3">
+            PiFrame uses a device-code flow — no browser on the Pi needed.
+            Click <strong>Start sign-in</strong>, then visit the URL shown on any
+            device and enter the code.
+          </p>
+          <form method="post" action="/onedrive/start-auth">
+            <button class="btn btn-primary">
+              <i class="bi bi-box-arrow-in-right"></i> Start sign-in
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-header fw-semibold"><i class="bi bi-info-circle"></i> Sync status</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-5">Status</dt>
+          <dd class="col-sm-7">{{ state.sync_status }}</dd>
+          <dt class="col-sm-5">Last sync</dt>
+          <dd class="col-sm-7">
+            {{ state.last_sync.strftime('%d %b %Y %H:%M') if state.last_sync else 'Never' }}
+          </dd>
+          <dt class="col-sm-5">Folder</dt>
+          <dd class="col-sm-7 font-monospace">{{ config.onedrive.folder_path }}</dd>
+          <dt class="col-sm-5">Sync interval</dt>
+          <dd class="col-sm-7">{{ config.onedrive.sync_interval // 60 }} min</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
