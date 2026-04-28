@@ -28,10 +28,10 @@ def _exif_date(path: str) -> str | None:
 
 class PhotoInfoOverlay:
     def __init__(self, config):
-        self._cfg = config.overlays['photo_info']
+        self._config = config
 
     def draw(self, image: Image.Image, photo_path: str = '') -> Image.Image:
-        cfg = self._cfg
+        cfg = self._config.overlays['photo_info']
         lines = []
 
         if cfg.get('show_date_taken') and photo_path:
@@ -45,7 +45,8 @@ class PhotoInfoOverlay:
         if not lines:
             return image
 
-        font = get_font(cfg['font_size'])
+        family = cfg.get('font') or self._config.get('fonts', 'global', default='dejavu-bold')
+        font = get_font(cfg['font_size'], family)
         color = parse_color(cfg['color'])
 
         return draw_text_with_bg(

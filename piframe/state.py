@@ -1,4 +1,6 @@
 """Shared mutable state accessed by the slideshow, web app, and sync threads."""
+import json
+import os
 import threading
 from datetime import datetime
 
@@ -132,6 +134,29 @@ class State:
     def auth_flow(self, value):
         with self._lock:
             self._auth_flow = value
+
+    # ── Persistence ───────────────────────────────────────────────────────────
+
+    def save(self, path: str):
+        """Atomically write resumable state to disk."""
+        data = {'current_photo': self.current_photo}
+        tmp = path + '.tmp'
+        try:
+            with open(tmp, 'w') as f:
+                json.dump(data, f)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def load(self, path: str):
+        """Restore state from a previous save if the file exists."""
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            with self._lock:
+                self._current_photo = data.get('current_photo', '')
+        except (OSError, json.JSONDecodeError):
+            pass
 
     # ── Weather ───────────────────────────────────────────────────────────────
 

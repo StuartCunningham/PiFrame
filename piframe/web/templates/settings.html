@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Settings — PiFrame{% endblock %}
 
+{% macro font_select(field_name, current_val, include_global_opt=true) %}
+<select class="form-select form-select-sm" name="{{ field_name }}">
+  {% if include_global_opt %}<option value="">Global default</option>{% endif %}
+  {% for key, label in fonts %}
+  <option value="{{ key }}" {% if current_val == key %}selected{% endif %}>{{ label }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}
+
 {% block content %}
 <form method="post" action="/settings">
 
@@ -34,15 +43,24 @@
 
         <div class="col-12 col-md-6">
           <label class="form-label">Photo folder</label>
-          <input class="form-control" type="text" name="photo_dir"
-                 value="{{ config.slideshow.photo_dir }}">
+          <div class="input-group">
+            <input class="form-control" type="text" name="photo_dir" id="photo-dir"
+                   value="{{ config.slideshow.photo_dir }}">
+            <button class="btn btn-outline-secondary" type="button"
+                    data-bs-toggle="modal" data-bs-target="#browseModal"
+                    onclick="browseOpen()">
+              <i class="bi bi-folder2-open"></i>
+            </button>
+          </div>
           <div class="form-text">Path on the Pi, relative or absolute.</div>
         </div>
 
         <div class="col-6 col-md-3">
           <label class="form-label">Interval (seconds)</label>
-          <input class="form-control" type="number" name="interval" min="5" max="86400"
-                 value="{{ config.slideshow.interval }}">
+          <input class="form-control" type="number" name="interval" id="interval"
+                 min="5" max="86400" value="{{ config.slideshow.interval }}"
+                 oninput="updateIntervalHint(this.value)">
+          <div class="form-text" id="interval-hint"></div>
         </div>
 
         <div class="col-6 col-md-3">
@@ -75,6 +93,29 @@
                    {% if config.slideshow.recursive %}checked{% endif %}>
             <label class="form-check-label" for="recursive">Sub-folders</label>
           </div>
+        </div>
+
+        <div class="col-12"><hr class="my-1"></div>
+        <div class="col-12">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="video_enabled" name="video_enabled"
+                   {% if config.slideshow.get('video', {}).get('enabled') %}checked{% endif %}
+                   onchange="toggleVideoVolume(this.checked)">
+            <label class="form-check-label fw-semibold" for="video_enabled">Enable videos</label>
+          </div>
+          <div class="form-text">Plays video files (mp4, mov, mkv, avi, webm) mixed in with photos. Requires <code>mpv</code> — HDMI only.</div>
+        </div>
+
+        <div class="col-12 col-md-5" id="video-volume-row"
+             style="{% if not config.slideshow.get('video', {}).get('enabled') %}display:none{% endif %}">
+          {% set vol = config.slideshow.get('video', {}).get('volume', 50) %}
+          <label class="form-label">Volume
+            <span class="text-secondary" id="vol-label">({{ vol }}%)</span>
+          </label>
+          <input class="form-range" type="range" name="video_volume" id="video-volume"
+                 min="0" max="100" step="5" value="{{ vol }}"
+                 oninput="applyVolume(this.value)">
+          <div class="form-text">Applied live. Save to persist.</div>
         </div>
 
       </div>
@@ -136,6 +177,17 @@
                    {% if config.display.hdmi.fullscreen %}checked{% endif %}>
             <label class="form-check-label" for="hdmi_fullscreen">Fullscreen</label>
           </div>
+        </div>
+
+        <div class="col-12 col-md-5">
+          {% set bri = config.display.hdmi.get('brightness', 1.0) %}
+          <label class="form-label">Brightness
+            <span class="text-secondary" id="bri-label">({{ bri }})</span>
+          </label>
+          <input class="form-range" type="range" name="hdmi_brightness" id="hdmi-brightness"
+                 min="0.1" max="1.0" step="0.05" value="{{ bri }}"
+                 oninput="applyBrightness(this.value)">
+          <div class="form-text">Applied immediately via xrandr (X11 only). Save to persist.</div>
         </div>
 
         <hr class="my-1">
@@ -212,6 +264,17 @@
 
     {% set positions = ['top-left','top-center','top-right','bottom-left','bottom-center','bottom-right'] %}
 
+    <!-- Global font -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold"><i class="bi bi-fonts me-2"></i>Global text style</div>
+      <div class="card-body row g-3">
+        <div class="col-12 col-md-5">
+          <label class="form-label">Font family <span class="text-secondary small">(applies to all overlays unless overridden)</span></label>
+          {{ font_select('fonts_global', config.fonts.get('global', 'dejavu-bold'), include_global_opt=false) }}
+        </div>
+      </div>
+    </div>
+
     <!-- Clock -->
     <div class="card mb-3">
       <div class="card-header d-flex align-items-center gap-3">
@@ -220,6 +283,13 @@
                  name="clock_enabled"
                  {% if config.overlays.clock.enabled %}checked{% endif %}>
           <label class="form-check-label fw-semibold" for="clock_enabled">Clock</label>
+        </div>
+        <div class="ms-auto d-flex gap-1 align-items-center flex-wrap">
+          <span class="text-secondary small me-1">Preset:</span>
+          {% for pid, plabel in [('minimal','Minimal'),('standard','Standard'),('bold','Bold'),('elegant','Elegant'),('matrix','Matrix')] %}
+          <button type="button" class="btn btn-outline-secondary btn-sm py-0"
+                  onclick="applyClockPreset('{{ pid }}')">{{ plabel }}</button>
+          {% endfor %}
         </div>
       </div>
       <div class="card-body row g-3">
@@ -231,40 +301,52 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label">Font size</label>
-          <input class="form-control" type="number" name="clock_font_size" min="12" max="120"
-                 value="{{ config.overlays.clock.font_size }}">
+          <input class="form-control" type="number" name="clock_font_size" id="clock_font_size"
+                 min="12" max="180" value="{{ config.overlays.clock.font_size }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font</label>
+          {{ font_select('clock_font', config.overlays.clock.get('font', '')) }}
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Text colour</label>
+          {% set c = config.overlays.clock.color %}
+          <input class="form-control form-control-color w-100" type="color" name="clock_color" id="clock_color"
+                 value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label">Time format</label>
           <input class="form-control font-monospace" type="text" name="clock_time_format"
                  value="{{ config.overlays.clock.time_format }}">
         </div>
-        <div class="col-6 col-md-3">
-          <label class="form-label">Text colour</label>
-          {% set c = config.overlays.clock.color %}
-          <input class="form-control form-control-color" type="color" name="clock_color"
-                 value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
-        </div>
-        <div class="col-12 col-md-6">
-          <label class="form-label">Date format <span class="text-secondary">(leave blank to hide)</span></label>
+        <div class="col-6 col-md-5">
+          <label class="form-label">Date format <span class="text-secondary">(blank = hide date)</span></label>
           <input class="form-control font-monospace" type="text" name="clock_date_format"
-                 value="{{ config.overlays.clock.date_format }}">
+                 id="clock_date_format" value="{{ config.overlays.clock.date_format }}">
         </div>
-        <div class="col-6 col-md-3">
-          <label class="form-label">Background opacity</label>
-          <input class="form-control" type="number" name="clock_bg_opacity" min="0" max="255"
-                 value="{{ config.overlays.clock.background_opacity }}">
+        <div class="col-6 col-md-2">
+          <label class="form-label">BG opacity</label>
+          <input class="form-control" type="number" name="clock_bg_opacity" id="clock_bg_opacity"
+                 min="0" max="255" value="{{ config.overlays.clock.background_opacity }}">
         </div>
         <div class="col-12 d-flex gap-4 flex-wrap">
-          {% for field, label in [('clock_show_date','Show date'),('clock_shadow','Drop shadow'),('clock_background','Background pill')] %}
           <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="{{ field }}" name="{{ field }}"
-                   {% if config.overlays.clock.get(field.replace('clock_','')) %}checked{% endif %}>
-            <label class="form-check-label" for="{{ field }}">{{ label }}</label>
+            <input class="form-check-input" type="checkbox" id="clock_show_date" name="clock_show_date"
+                   {% if config.overlays.clock.show_date %}checked{% endif %}>
+            <label class="form-check-label" for="clock_show_date">Show date</label>
           </div>
-          {% endfor %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="clock_shadow" name="clock_shadow"
+                   {% if config.overlays.clock.shadow %}checked{% endif %}>
+            <label class="form-check-label" for="clock_shadow">Drop shadow</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="clock_background" name="clock_background"
+                   {% if config.overlays.clock.background %}checked{% endif %}>
+            <label class="form-check-label" for="clock_background">Background pill</label>
+          </div>
         </div>
       </div>
     </div>
@@ -307,20 +389,24 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label">Font size</label>
           <input class="form-control" type="number" name="weather_font_size" min="12" max="120"
                  value="{{ config.overlays.weather.font_size }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font</label>
+          {{ font_select('weather_font', config.overlays.weather.get('font', '')) }}
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label">Update (seconds)</label>
           <input class="form-control" type="number" name="weather_update_interval" min="600"
                  value="{{ config.overlays.weather.update_interval }}">
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label">Text colour</label>
           {% set c = config.overlays.weather.color %}
-          <input class="form-control form-control-color" type="color" name="weather_color"
+          <input class="form-control form-control-color w-100" type="color" name="weather_color"
                  value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
         </div>
       </div>
@@ -345,26 +431,61 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <label class="form-label">Font size</label>
           <input class="form-control" type="number" name="info_font_size" min="12" max="80"
                  value="{{ config.overlays.photo_info.font_size }}">
         </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Font</label>
+          {{ font_select('info_font', config.overlays.photo_info.get('font', '')) }}
+        </div>
         <div class="col-12 d-flex gap-4 flex-wrap">
-          {% for field, label in [('info_show_date','Date taken (EXIF)'),('info_show_filename','Filename'),('info_shadow','Drop shadow')] %}
           <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="{{ field }}" name="{{ field }}"
-                   {% if field == 'info_show_date' and config.overlays.photo_info.show_date_taken %}checked
-                   {% elif field == 'info_show_filename' and config.overlays.photo_info.show_filename %}checked
-                   {% elif field == 'info_shadow' and config.overlays.photo_info.shadow %}checked{% endif %}>
-            <label class="form-check-label" for="{{ field }}">{{ label }}</label>
+            <input class="form-check-input" type="checkbox" id="info_show_date" name="info_show_date"
+                   {% if config.overlays.photo_info.show_date_taken %}checked{% endif %}>
+            <label class="form-check-label" for="info_show_date">Date taken (EXIF)</label>
           </div>
-          {% endfor %}
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="info_show_filename" name="info_show_filename"
+                   {% if config.overlays.photo_info.show_filename %}checked{% endif %}>
+            <label class="form-check-label" for="info_show_filename">Filename</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="info_shadow" name="info_shadow"
+                   {% if config.overlays.photo_info.shadow %}checked{% endif %}>
+            <label class="form-check-label" for="info_shadow">Drop shadow</label>
+          </div>
         </div>
       </div>
     </div>
 
   </div><!-- /overlays pane -->
+
+  <!-- ── Folder browser modal ────────────────────────────────────────────── -->
+  <div class="modal fade" id="browseModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-folder2-open me-2"></i>Select folder</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0">
+          <div class="px-3 pt-3 pb-2 border-bottom">
+            <code id="browse-path" class="text-secondary small"></code>
+          </div>
+          <div id="browse-list" class="list-group list-group-flush"
+               style="max-height:320px;overflow-y:auto"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="browse-select">
+            <i class="bi bi-check2"></i> Select this folder
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ── OneDrive ─────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="pane-onedrive">
@@ -424,22 +545,83 @@
 
   <!-- ── System ───────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="pane-system">
-    <div class="card">
+
+    <!-- Web UI settings -->
+    <div class="card mb-3">
+      <div class="card-header fw-semibold">Web UI</div>
       <div class="card-body row g-3">
         <div class="col-6 col-md-3">
-          <label class="form-label">Web UI port</label>
+          <label class="form-label">Port</label>
           <input class="form-control" type="number" name="web_port" min="1024" max="65535"
                  value="{{ config.web.port }}">
           <div class="form-text">Restart required to take effect.</div>
         </div>
         <div class="col-12 col-md-5">
-          <label class="form-label">Web UI password <span class="text-secondary">(blank = no login)</span></label>
+          <label class="form-label">Password <span class="text-secondary">(blank = no login)</span></label>
           <input class="form-control" type="password" name="web_password"
                  value="{{ config.web.password }}"
                  autocomplete="new-password">
         </div>
+        <div class="col-12 mt-3 border-top pt-3">
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    onclick="restartService()">
+              <i class="bi bi-arrow-repeat"></i> Restart PiFrame
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    onclick="rebootPi()">
+              <i class="bi bi-power"></i> Reboot Pi
+            </button>
+          </div>
+          <div class="form-text">Restart applies service changes. Reboot restarts the whole Pi.</div>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label">Session secret key
+            <span class="text-secondary small ms-1">(restart required)</span>
+          </label>
+          <div class="input-group">
+            <input class="form-control font-monospace" type="text" name="web_secret_key"
+                   id="secret-key-input" value="{{ config.web.secret_key }}"
+                   autocomplete="off">
+            <button class="btn btn-outline-secondary" type="button" onclick="generateSecretKey()">
+              <i class="bi bi-shuffle"></i> Generate
+            </button>
+          </div>
+          <div class="form-text">Used to sign session cookies. Change from the default to prevent session forgery.</div>
+        </div>
       </div>
     </div>
+
+    <!-- System info -->
+    <div class="card">
+      <div class="card-header fw-semibold">System info</div>
+      <div class="card-body">
+        <div id="sysinfo-loading" class="text-secondary small">Loading…</div>
+        <div id="sysinfo" class="row g-3" style="display:none">
+          <div class="col-6 col-md-3">
+            <div class="text-secondary small">Hostname</div>
+            <div id="si-hostname" class="fw-semibold font-monospace"></div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-secondary small">IP address</div>
+            <div id="si-ip" class="fw-semibold font-monospace"></div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="text-secondary small">Python</div>
+            <div id="si-python" class="fw-semibold font-monospace"></div>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="text-secondary small mb-1">Disk usage</div>
+            <div class="progress" style="height:8px">
+              <div id="si-disk-bar" class="progress-bar" role="progressbar"></div>
+            </div>
+            <div id="si-disk-text" class="form-text mt-1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
 </div><!-- /tab-content -->
@@ -452,4 +634,165 @@
 </div>
 
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Tab persistence across POST redirect ──────────────────────────────────
+  (function () {
+    const STORE_KEY = 'pf_settings_tab';
+    // Restore on load
+    const saved = sessionStorage.getItem(STORE_KEY);
+    if (saved) {
+      sessionStorage.removeItem(STORE_KEY);
+      const el = document.getElementById(saved);
+      if (el) bootstrap.Tab.getOrCreateInstance(el).show();
+    }
+    // Save before submit
+    document.querySelector('form[action="/settings"]').addEventListener('submit', () => {
+      const active = document.querySelector('#settingsTabs .nav-link.active');
+      if (active) sessionStorage.setItem(STORE_KEY, active.id);
+    });
+  })();
+
+  // ── Clock presets ──────────────────────────────────────────────────────────
+  const CLOCK_PRESETS = {
+    minimal:  { font_size: 56, show_date: false, shadow: true,  bg: false, bg_opacity: 0,   color: '#ffffff', font: '' },
+    standard: { font_size: 52, show_date: true,  shadow: true,  bg: true,  bg_opacity: 120, color: '#ffffff', font: '' },
+    bold:     { font_size: 80, show_date: true,  shadow: false, bg: true,  bg_opacity: 200, color: '#ffffff', font: '' },
+    elegant:  { font_size: 52, show_date: true,  shadow: true,  bg: false, bg_opacity: 0,   color: '#f5e6c8', font: 'dejavu-serif-bold' },
+    matrix:   { font_size: 60, show_date: false, shadow: false, bg: true,  bg_opacity: 160, color: '#00ff41', font: 'dejavu-mono-bold' },
+  };
+
+  function applyClockPreset(key) {
+    const p = CLOCK_PRESETS[key];
+    if (!p) return;
+    document.getElementById('clock_font_size').value  = p.font_size;
+    document.getElementById('clock_show_date').checked = p.show_date;
+    document.getElementById('clock_shadow').checked    = p.shadow;
+    document.getElementById('clock_background').checked = p.bg;
+    document.getElementById('clock_bg_opacity').value  = p.bg_opacity;
+    document.getElementById('clock_color').value       = p.color;
+    const fontSel = document.querySelector('select[name="clock_font"]');
+    if (fontSel) fontSel.value = p.font;
+    if (!p.show_date) document.getElementById('clock_date_format').value = '';
+    else if (!document.getElementById('clock_date_format').value)
+      document.getElementById('clock_date_format').value = '%A, %-d %B';
+  }
+
+  // ── Interval hint ──────────────────────────────────────────────────────────
+  function updateIntervalHint(v) {
+    v = parseInt(v);
+    if (isNaN(v) || v <= 0) { document.getElementById('interval-hint').textContent = ''; return; }
+    const m = Math.floor(v / 60), s = v % 60;
+    let txt = '= ';
+    if (m) txt += m + ' min' + (m !== 1 ? 's' : '');
+    if (m && s) txt += ' ';
+    if (s) txt += s + 's';
+    document.getElementById('interval-hint').textContent = txt;
+  }
+  updateIntervalHint(document.getElementById('interval').value);
+
+  // ── Video volume ───────────────────────────────────────────────────────────
+  function toggleVideoVolume(enabled) {
+    document.getElementById('video-volume-row').style.display = enabled ? '' : 'none';
+  }
+  async function applyVolume(v) {
+    document.getElementById('vol-label').textContent = '(' + v + '%)';
+    await fetch('/api/volume', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({volume: parseInt(v)})
+    });
+  }
+
+  // ── Brightness ─────────────────────────────────────────────────────────────
+  async function applyBrightness(v) {
+    document.getElementById('bri-label').textContent = '(' + parseFloat(v).toFixed(2) + ')';
+    await fetch('/api/brightness', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({brightness: parseFloat(v)})
+    });
+  }
+
+  // ── Folder browser ─────────────────────────────────────────────────────────
+  let browseCurrent = '';
+  function browseOpen() {
+    const cur = document.getElementById('photo-dir').value.trim();
+    browseTo(cur || '.');
+  }
+  async function browseTo(path) {
+    const d = await fetch('/api/browse?path=' + encodeURIComponent(path)).then(r => r.json());
+    browseCurrent = d.path;
+    document.getElementById('browse-path').textContent = d.path;
+    const list = document.getElementById('browse-list');
+    list.innerHTML = '';
+    if (d.parent) {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'list-group-item list-group-item-action text-secondary';
+      a.innerHTML = '<i class="bi bi-arrow-up me-2"></i>..';
+      a.onclick = e => { e.preventDefault(); browseTo(d.parent); };
+      list.appendChild(a);
+    }
+    for (const dir of d.dirs) {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'list-group-item list-group-item-action';
+      a.innerHTML = '<i class="bi bi-folder me-2 text-warning"></i>' + dir;
+      a.onclick = e => { e.preventDefault(); browseTo(d.path + '/' + dir); };
+      list.appendChild(a);
+    }
+    if (!d.dirs.length && !d.parent) {
+      list.innerHTML = '<div class="px-3 py-2 text-secondary small">No sub-folders.</div>';
+    }
+  }
+  document.getElementById('browse-select').addEventListener('click', () => {
+    document.getElementById('photo-dir').value = browseCurrent;
+    bootstrap.Modal.getInstance(document.getElementById('browseModal')).hide();
+  });
+
+  // ── Secret key generator ───────────────────────────────────────────────────
+  function generateSecretKey() {
+    const arr = new Uint8Array(32);
+    crypto.getRandomValues(arr);
+    document.getElementById('secret-key-input').value =
+      Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // ── System info ────────────────────────────────────────────────────────────
+  let sysinfoLoaded = false;
+  document.getElementById('tab-system').addEventListener('shown.bs.tab', async () => {
+    if (sysinfoLoaded) return;
+    sysinfoLoaded = true;
+    try {
+      const d = await fetch('/api/sysinfo').then(r => r.json());
+      document.getElementById('si-hostname').textContent = d.hostname;
+      document.getElementById('si-ip').textContent = d.ip;
+      document.getElementById('si-python').textContent = d.python;
+      const pct = Math.round(d.disk_used_gb / d.disk_total_gb * 100);
+      const bar = document.getElementById('si-disk-bar');
+      bar.style.width = pct + '%';
+      bar.className = 'progress-bar ' + (pct > 85 ? 'bg-danger' : pct > 60 ? 'bg-warning' : 'bg-success');
+      document.getElementById('si-disk-text').textContent =
+        `${d.disk_used_gb} GB used of ${d.disk_total_gb} GB (${d.disk_free_gb} GB free)`;
+      document.getElementById('sysinfo-loading').style.display = 'none';
+      document.getElementById('sysinfo').style.display = '';
+    } catch (e) {
+      document.getElementById('sysinfo-loading').textContent = 'Failed to load system info.';
+    }
+  });
+
+  // ── Restart / reboot ───────────────────────────────────────────────────────
+  async function restartService() {
+    if (!confirm('Restart the PiFrame service? The web UI will be unavailable briefly.')) return;
+    await fetch('/api/system/restart', {method: 'POST'});
+    setTimeout(() => location.reload(), 4000);
+  }
+  async function rebootPi() {
+    if (!confirm('Reboot the Pi? This will take about 30 seconds.')) return;
+    await fetch('/api/system/reboot', {method: 'POST'});
+  }
+</script>
 {% endblock %}

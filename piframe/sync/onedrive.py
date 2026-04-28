@@ -153,6 +153,7 @@ class OneDriveSync:
                 dl_url = item.get('@microsoft.graph.downloadUrl')
                 if dl_url:
                     r = requests.get(dl_url, stream=True, timeout=60)
+                    r.raise_for_status()
                     with open(local_path, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=65536):
                             f.write(chunk)

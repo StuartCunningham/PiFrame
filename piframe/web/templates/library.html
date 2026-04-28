@@ -1,0 +1,694 @@
+{% extends "base.html" %}
+{% block title %}Library — PiFrame{% endblock %}
+
+{% block content %}
+<div class="d-flex gap-3" id="lib-layout" style="height:calc(100vh - 100px); min-height:500px;">
+
+  <!-- ══ Left: Editor ══════════════════════════════════════════════════════ -->
+  <div class="flex-shrink-0 d-flex flex-column" style="width:360px; overflow-y:auto;">
+
+    <!-- Preview -->
+    <div class="card mb-3 flex-shrink-0">
+      <div class="card-body p-2 text-center" style="background:#0d1117; min-height:140px; display:flex; align-items:center; justify-content:center; border-radius:.375rem;">
+        <div id="ed-no-sel" class="text-secondary small py-2">
+          <i class="bi bi-collection-play" style="font-size:2rem; display:block; margin-bottom:.4rem; opacity:.3;"></i>
+          Select a file from the library
+        </div>
+        <img id="ed-thumb" src="" alt="" class="img-fluid rounded"
+             style="max-height:200px; object-fit:contain; display:none;"
+             onerror="this.style.display='none'">
+      </div>
+    </div>
+
+    <!-- File info bar -->
+    <div id="ed-info" style="display:none" class="mb-3 flex-shrink-0">
+      <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+        <span id="ed-type-badge" class="badge"></span>
+        <span id="ed-name" class="fw-semibold" style="word-break:break-all;"></span>
+      </div>
+      <div class="text-secondary small" id="ed-details"></div>
+    </div>
+
+    <!-- Editor form -->
+    <div id="ed-form" style="display:none" class="flex-grow-1">
+
+      <!-- General -->
+      <div class="card mb-3">
+        <div class="card-header small fw-semibold py-2">General</div>
+        <div class="card-body py-2">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="ed-skip">
+            <label class="form-check-label small" for="ed-skip">Skip this file</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Photo settings -->
+      <div id="ed-photo-settings" class="card mb-3" style="display:none">
+        <div class="card-header small fw-semibold py-2"><i class="bi bi-image me-1"></i>Photo</div>
+        <div class="card-body row g-2 py-2">
+          <div class="col-6">
+            <label class="form-label small mb-1">Fit mode</label>
+            <select class="form-select form-select-sm" id="ed-fit">
+              <option value="">Global default</option>
+              <option value="fill">Fill (crop)</option>
+              <option value="fit">Fit (letterbox)</option>
+              <option value="stretch">Stretch</option>
+              <option value="center">Center</option>
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1">Duration (sec)</label>
+            <input type="number" class="form-control form-control-sm" id="ed-duration"
+                   min="1" placeholder="Global default">
+          </div>
+          <div class="col-12">
+            <label class="form-label small mb-1">Caption</label>
+            <input type="text" class="form-control form-control-sm" id="ed-caption"
+                   placeholder="Overlay text (blank = none)" maxlength="200">
+          </div>
+          <div class="col-7">
+            <label class="form-label small mb-1">Caption position</label>
+            <select class="form-select form-select-sm" id="ed-caption-pos">
+              {% for p in ['bottom-center','bottom-left','bottom-right','top-center','top-left','top-right'] %}
+              <option value="{{ p }}">{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label small mb-1">Font size</label>
+            <input type="number" class="form-control form-control-sm" id="ed-caption-size"
+                   min="12" max="120" placeholder="Default">
+          </div>
+        </div>
+      </div>
+
+      <!-- Video settings -->
+      <div id="ed-video-settings" class="card mb-3" style="display:none">
+        <div class="card-header small fw-semibold py-2"><i class="bi bi-camera-video me-1"></i>Video</div>
+        <div class="card-body row g-2 py-2">
+          <div class="col-12">
+            <label class="form-label small mb-1">Volume
+              <span class="text-secondary">(blank = global default)</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <input type="number" class="form-control" id="ed-volume"
+                     min="0" max="100" placeholder="Global">
+              <span class="input-group-text">%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video framing -->
+      <div id="ed-framing-settings" class="card mb-3" style="display:none">
+        <div class="card-header small fw-semibold py-2 d-flex align-items-center justify-content-between">
+          <span><i class="bi bi-aspect-ratio me-1"></i>Framing</span>
+          <span class="text-secondary fw-normal" id="ed-res-hint" style="font-size:.72rem;"></span>
+        </div>
+        <div class="card-body py-2">
+
+          <!-- Fit buttons -->
+          <label class="form-label small mb-1">Fit</label>
+          <div class="btn-group w-100 mb-3" role="group">
+            <input type="radio" class="btn-check" name="ed-vfit" id="vfit-fill"
+                   value="fill" onchange="onFitChange()">
+            <label class="btn btn-outline-secondary btn-sm" for="vfit-fill">Fill (crop)</label>
+            <input type="radio" class="btn-check" name="ed-vfit" id="vfit-fit"
+                   value="fit" onchange="onFitChange()">
+            <label class="btn btn-outline-secondary btn-sm" for="vfit-fit">Letterbox</label>
+            <input type="radio" class="btn-check" name="ed-vfit" id="vfit-stretch"
+                   value="stretch" onchange="onFitChange()">
+            <label class="btn btn-outline-secondary btn-sm" for="vfit-stretch">Stretch</label>
+          </div>
+
+          <!-- Framing preview -->
+          <div class="mb-3">
+            <div class="text-secondary small mb-1">Preview</div>
+            <div id="frame-outer" style="position:relative; border:2px solid #4a9eff55; border-radius:4px; overflow:hidden; background:#0d1117;">
+              <!-- Video content area -->
+              <div id="frame-inner" style="position:absolute; background:rgba(74,158,255,.12); border:1px solid rgba(74,158,255,.4); transition:all .12s;"></div>
+              <!-- Display frame overlay (dashed) -->
+              <div style="position:absolute; inset:0; border:2px dashed rgba(74,158,255,.6); z-index:3; border-radius:2px; pointer-events:none;"></div>
+              <!-- Spacer to set aspect ratio -->
+              <div id="frame-spacer" style="position:relative; z-index:2;"></div>
+            </div>
+            <div class="d-flex justify-content-between mt-1" style="font-size:.68rem; color:#6e7681;">
+              <span>Video content</span>
+              <span>Display frame</span>
+            </div>
+          </div>
+
+          <!-- Pan controls — fill mode only -->
+          <div id="pan-controls">
+            <div class="mb-2">
+              <label class="form-label small mb-1">Pan X
+                <span class="text-secondary" id="pan-x-label">(0.00)</span>
+                <span class="text-secondary" style="font-size:.7rem;"> — left ← → right</span>
+              </label>
+              <input type="range" class="form-range" id="ed-pan-x"
+                     min="-1" max="1" step="0.01" value="0"
+                     oninput="onPanChange()">
+            </div>
+            <div class="mb-3">
+              <label class="form-label small mb-1">Pan Y
+                <span class="text-secondary" id="pan-y-label">(0.00)</span>
+                <span class="text-secondary" style="font-size:.7rem;"> — top ↑ ↓ bottom</span>
+              </label>
+              <input type="range" class="form-range" id="ed-pan-y"
+                     min="-1" max="1" step="0.01" value="0"
+                     oninput="onPanChange()">
+            </div>
+          </div>
+
+          <!-- Zoom -->
+          <div class="mb-2">
+            <label class="form-label small mb-1">Zoom
+              <span class="text-secondary" id="zoom-label">(0.00)</span>
+            </label>
+            <input type="range" class="form-range" id="ed-zoom"
+                   min="-1" max="1" step="0.01" value="0"
+                   oninput="onZoomChange()">
+          </div>
+
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetFraming()">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset framing
+          </button>
+        </div>
+      </div>
+
+      <!-- Save bar -->
+      <div class="d-flex gap-2 align-items-center pb-3">
+        <button class="btn btn-primary btn-sm px-3" onclick="saveMedia()">
+          <i class="bi bi-floppy"></i> Save
+        </button>
+        <span id="ed-saved" class="text-success small" style="display:none">
+          <i class="bi bi-check-circle-fill"></i> Saved
+        </span>
+        <span id="ed-error" class="text-danger small" style="display:none"></span>
+      </div>
+    </div><!-- /ed-form -->
+
+  </div><!-- /editor panel -->
+
+  <!-- ══ Right: Library ════════════════════════════════════════════════════ -->
+  <div class="flex-grow-1 d-flex flex-column" style="min-width:0; border-left:1px solid #30363d; padding-left:1rem; overflow:hidden;">
+
+    <!-- Filter bar -->
+    <div class="d-flex gap-2 mb-3 flex-wrap align-items-center flex-shrink-0">
+      <div class="btn-group btn-group-sm" role="group">
+        <input type="radio" class="btn-check" name="lib-filter" id="f-all"
+               value="all" checked onchange="filterLibrary()">
+        <label class="btn btn-outline-secondary" for="f-all">All</label>
+        <input type="radio" class="btn-check" name="lib-filter" id="f-photos"
+               value="photo" onchange="filterLibrary()">
+        <label class="btn btn-outline-secondary" for="f-photos">
+          <i class="bi bi-image"></i> Photos
+        </label>
+        <input type="radio" class="btn-check" name="lib-filter" id="f-videos"
+               value="video" onchange="filterLibrary()">
+        <label class="btn btn-outline-secondary" for="f-videos">
+          <i class="bi bi-camera-video"></i> Videos
+        </label>
+      </div>
+      <input type="search" class="form-control form-control-sm" id="lib-search"
+             placeholder="Search…" style="max-width:220px;" oninput="filterLibrary()">
+      <span class="text-secondary small ms-auto" id="lib-count"></span>
+    </div>
+
+    <!-- Thumbnail grid -->
+    <div id="lib-grid" class="d-flex flex-wrap gap-2 align-content-start"
+         style="overflow-y:auto; flex:1;">
+      <div class="text-secondary small p-3" id="lib-loading">
+        <span class="spinner-border spinner-border-sm me-2"></span>Loading library…
+      </div>
+    </div>
+
+  </div><!-- /library panel -->
+
+</div><!-- /lib-layout -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const DISPLAY_W = {{ config.display.hdmi.width }};
+const DISPLAY_H = {{ config.display.hdmi.height }};
+const DISPLAY_AR = DISPLAY_W / DISPLAY_H;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allFiles      = [];
+let selectedPath  = null;
+let selectedType  = null;
+let selectedInfo  = null;
+
+// ── Library ──────────────────────────────────────────────────────────────────
+
+async function loadLibrary() {
+  try {
+    const d = await fetch('/api/library').then(r => r.json());
+    allFiles = d.files;
+    document.getElementById('lib-loading').style.display = 'none';
+    renderGrid(allFiles);
+  } catch (e) {
+    document.getElementById('lib-loading').textContent = 'Failed to load library.';
+  }
+}
+
+function filterLibrary() {
+  const filter = document.querySelector('input[name="lib-filter"]:checked').value;
+  const q = document.getElementById('lib-search').value.toLowerCase();
+  renderGrid(allFiles.filter(f =>
+    (filter === 'all' || f.type === filter) &&
+    (!q || f.name.toLowerCase().includes(q))
+  ));
+}
+
+function renderGrid(files) {
+  const grid = document.getElementById('lib-grid');
+  grid.innerHTML = '';
+  document.getElementById('lib-count').textContent =
+    files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+  if (!files.length) {
+    grid.innerHTML = '<div class="text-secondary small p-3">No files match.</div>';
+    return;
+  }
+
+  // Group by containing folder (dirname of rel path)
+  const groups = new Map();
+  for (const f of files) {
+    const slash = f.rel.lastIndexOf('/');
+    const folder = slash >= 0 ? f.rel.slice(0, slash) : '';
+    if (!groups.has(folder)) groups.set(folder, []);
+    groups.get(folder).push(f);
+  }
+
+  const hasSubfolders = groups.size > 1 || !groups.has('');
+  const frag = document.createDocumentFragment();
+
+  // Sort: root first, then alphabetical
+  const sortedFolders = [...groups.keys()].sort((a, b) => {
+    if (a === '') return -1;
+    if (b === '') return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const folder of sortedFolders) {
+    const groupFiles = groups.get(folder);
+
+    if (hasSubfolders) {
+      // Folder header as a collapsible <details>
+      const details = document.createElement('details');
+      details.open = true;
+      details.className = 'lib-folder w-100';
+      details.innerHTML =
+        `<summary class="lib-folder-header">` +
+          `<i class="bi bi-folder2-open me-2"></i>` +
+          `<span>${esc(folder || '(root)')}</span>` +
+          `<span class="lib-folder-count">${groupFiles.length}</span>` +
+        `</summary>`;
+      const inner = document.createElement('div');
+      inner.className = 'd-flex flex-wrap gap-2 pt-2 pb-3';
+      appendThumbs(inner, groupFiles);
+      details.appendChild(inner);
+      frag.appendChild(details);
+    } else {
+      // Flat grid — no folder headers
+      appendThumbs(frag, groupFiles);
+    }
+  }
+
+  grid.appendChild(frag);
+}
+
+function appendThumbs(container, files) {
+  for (const f of files) {
+    const div = document.createElement('div');
+    div.className = 'lib-thumb' +
+      (f.is_current        ? ' lib-current'  : '') +
+      (f.path === selectedPath ? ' lib-selected' : '');
+    div.dataset.path = f.path;
+    div.onclick = () => selectFile(f.path, f.type);
+    div.innerHTML =
+      `<div class="lib-thumb-img-wrap">` +
+        `<img src="/api/library/thumb?path=${encodeURIComponent(f.path)}"` +
+             ` loading="lazy" alt="" onerror="this.parentElement.classList.add('no-thumb')">` +
+        (f.type === 'video'
+          ? `<div class="lib-play-badge"><i class="bi bi-play-circle-fill"></i></div>` : '') +
+        (f.is_current ? `<div class="lib-now-badge">NOW</div>` : '') +
+      `</div>` +
+      `<div class="lib-thumb-name" title="${esc(f.rel)}">${esc(f.name)}</div>`;
+    container.appendChild(div);
+  }
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────────
+
+async function selectFile(path, type) {
+  selectedPath = path;
+  selectedType = type;
+  selectedInfo = null;
+
+  // Highlight grid
+  document.querySelectorAll('.lib-thumb').forEach(el =>
+    el.classList.toggle('lib-selected', el.dataset.path === path));
+
+  // Preview image
+  document.getElementById('ed-no-sel').style.display = 'none';
+  const thumb = document.getElementById('ed-thumb');
+  thumb.src = '/api/library/thumb?path=' + encodeURIComponent(path);
+  thumb.style.display = '';
+
+  // Type badge
+  const badge = document.getElementById('ed-type-badge');
+  badge.textContent = type === 'video' ? 'Video' : 'Photo';
+  badge.className = 'badge ' + (type === 'video' ? 'bg-info text-dark' : 'bg-secondary');
+  document.getElementById('ed-name').textContent = path.split('/').pop();
+  document.getElementById('ed-info').style.display = '';
+  document.getElementById('ed-details').textContent = '…';
+
+  // Show correct editor sections
+  document.getElementById('ed-photo-settings').style.display   = type === 'photo'  ? '' : 'none';
+  document.getElementById('ed-video-settings').style.display   = type === 'video'  ? '' : 'none';
+  document.getElementById('ed-framing-settings').style.display = type === 'video'  ? '' : 'none';
+  document.getElementById('ed-form').style.display = '';
+  document.getElementById('ed-saved').style.display = 'none';
+  document.getElementById('ed-error').style.display = 'none';
+
+  // Fetch info and meta in parallel
+  const [infoD, metaD] = await Promise.all([
+    fetch('/api/media/info?path='  + encodeURIComponent(path)).then(r => r.json()),
+    fetch('/api/media/meta?path='  + encodeURIComponent(path)).then(r => r.json()),
+  ]);
+
+  selectedInfo = infoD;
+  const meta   = metaD.meta || {};
+
+  // Details line
+  const parts = [];
+  if (infoD.width && infoD.height) parts.push(infoD.width + '\xd7' + infoD.height);
+  if (infoD.duration_str)          parts.push(infoD.duration_str);
+  if (infoD.size)                  parts.push(fmtSize(infoD.size));
+  document.getElementById('ed-details').textContent = parts.join(' · ');
+
+  // Populate form fields
+  document.getElementById('ed-skip').checked = !!meta.skip;
+
+  if (type === 'photo') {
+    document.getElementById('ed-fit').value         = meta.fit_mode        || '';
+    document.getElementById('ed-duration').value    = meta.duration        || '';
+    document.getElementById('ed-caption').value     = meta.caption         || '';
+    document.getElementById('ed-caption-pos').value = meta.caption_position || 'bottom-center';
+    document.getElementById('ed-caption-size').value= meta.caption_font_size || '';
+  } else {
+    document.getElementById('ed-volume').value = meta.volume != null ? meta.volume : '';
+
+    const fit = meta.video_fit || 'fill';
+    const radio = document.querySelector(`input[name="ed-vfit"][value="${fit}"]`);
+    if (radio) radio.checked = true;
+
+    document.getElementById('ed-pan-x').value = +(meta.video_pan_x ?? 0);
+    document.getElementById('ed-pan-y').value = +(meta.video_pan_y ?? 0);
+    document.getElementById('ed-zoom').value  = +(meta.video_zoom  ?? 0);
+    updateSliderLabels();
+    onFitChange();   // sets pan-controls visibility + preview
+
+    if (infoD.width && infoD.height) {
+      document.getElementById('ed-res-hint').textContent =
+        infoD.width + '\xd7' + infoD.height +
+        ' → ' + DISPLAY_W + '\xd7' + DISPLAY_H;
+    }
+  }
+}
+
+// ── Framing controls ─────────────────────────────────────────────────────────
+
+function onFitChange() {
+  const fit = activeFit();
+  document.getElementById('pan-controls').style.display = fit === 'fill' ? '' : 'none';
+  updateFramingPreview();
+}
+
+function onPanChange() {
+  updateSliderLabels();
+  updateFramingPreview();
+}
+
+function onZoomChange() {
+  const z = +document.getElementById('ed-zoom').value;
+  document.getElementById('zoom-label').textContent = '(' + z.toFixed(2) + ')';
+  updateFramingPreview();
+}
+
+function updateSliderLabels() {
+  const px = +document.getElementById('ed-pan-x').value;
+  const py = +document.getElementById('ed-pan-y').value;
+  document.getElementById('pan-x-label').textContent = '(' + px.toFixed(2) + ')';
+  document.getElementById('pan-y-label').textContent = '(' + py.toFixed(2) + ')';
+}
+
+function activeFit() {
+  return document.querySelector('input[name="ed-vfit"]:checked')?.value || 'fill';
+}
+
+function updateFramingPreview() {
+  if (!selectedInfo || selectedType !== 'video') return;
+  const { width: srcW, height: srcH } = selectedInfo;
+  if (!srcW || !srcH) return;
+
+  const PREV_W = 296;
+  const PREV_H = Math.round(PREV_W / DISPLAY_AR);
+  const outer  = document.getElementById('frame-outer');
+  const inner  = document.getElementById('frame-inner');
+  const spacer = document.getElementById('frame-spacer');
+
+  outer.style.width  = PREV_W + 'px';
+  spacer.style.height = PREV_H + 'px';
+
+  const fit    = activeFit();
+  const panX   = +document.getElementById('ed-pan-x').value;
+  const panY   = +document.getElementById('ed-pan-y').value;
+  const zoom   = +document.getElementById('ed-zoom').value;
+  const zScale = Math.pow(2, zoom * 0.75);  // soften the zoom range for preview
+  const srcAR  = srcW / srcH;
+
+  let iW, iH, iL, iT;
+
+  if (fit === 'fit') {
+    // Scale to fit entirely inside — letterbox
+    if (srcAR > DISPLAY_AR) { iW = PREV_W; iH = iW / srcAR; }
+    else                     { iH = PREV_H; iW = iH * srcAR; }
+    iW *= zScale; iH *= zScale;
+    iL = (PREV_W - iW) / 2;
+    iT = (PREV_H - iH) / 2;
+  } else if (fit === 'stretch') {
+    iW = PREV_W * zScale;
+    iH = PREV_H * zScale;
+    iL = (PREV_W - iW) / 2;
+    iT = (PREV_H - iH) / 2;
+  } else {
+    // fill — scale to cover, then pan within overflow
+    if (srcAR > DISPLAY_AR) { iH = PREV_H; iW = iH * srcAR; }
+    else                     { iW = PREV_W; iH = iW / srcAR; }
+    iW *= zScale; iH *= zScale;
+    const overX = Math.max(0, iW - PREV_W);
+    const overY = Math.max(0, iH - PREV_H);
+    // panX=+1 → shift video right → show right edge; mirror for display offset
+    iL = (PREV_W - iW) / 2 - panX * (overX / 2);
+    iT = (PREV_H - iH) / 2 - panY * (overY / 2);
+  }
+
+  inner.style.width  = Math.round(iW) + 'px';
+  inner.style.height = Math.round(iH) + 'px';
+  inner.style.left   = Math.round(iL) + 'px';
+  inner.style.top    = Math.round(iT) + 'px';
+}
+
+function resetFraming() {
+  document.getElementById('vfit-fill').checked = true;
+  document.getElementById('ed-pan-x').value = 0;
+  document.getElementById('ed-pan-y').value = 0;
+  document.getElementById('ed-zoom').value  = 0;
+  document.getElementById('zoom-label').textContent = '(0.00)';
+  updateSliderLabels();
+  onFitChange();
+}
+
+// ── Save ─────────────────────────────────────────────────────────────────────
+
+async function saveMedia() {
+  if (!selectedPath) return;
+  const meta = {};
+
+  if (document.getElementById('ed-skip').checked) meta.skip = true;
+
+  if (selectedType === 'photo') {
+    const fit = document.getElementById('ed-fit').value;
+    if (fit) meta.fit_mode = fit;
+    const dur = parseInt(document.getElementById('ed-duration').value);
+    if (!isNaN(dur) && dur > 0) meta.duration = dur;
+    const cap = document.getElementById('ed-caption').value.trim();
+    if (cap) {
+      meta.caption          = cap;
+      meta.caption_position = document.getElementById('ed-caption-pos').value;
+      const sz = parseInt(document.getElementById('ed-caption-size').value);
+      if (!isNaN(sz) && sz > 0) meta.caption_font_size = sz;
+    }
+  } else {
+    const vol = parseInt(document.getElementById('ed-volume').value);
+    if (!isNaN(vol) && vol >= 0 && vol <= 100) meta.volume = vol;
+
+    const fit = activeFit();
+    if (fit !== 'fill') meta.video_fit = fit;   // fill is default; omit to keep file clean
+
+    if (fit === 'fill') {
+      const px = +parseFloat(document.getElementById('ed-pan-x').value).toFixed(3);
+      const py = +parseFloat(document.getElementById('ed-pan-y').value).toFixed(3);
+      if (px !== 0) meta.video_pan_x = px;
+      if (py !== 0) meta.video_pan_y = py;
+    }
+
+    const z = +parseFloat(document.getElementById('ed-zoom').value).toFixed(3);
+    if (z !== 0) meta.video_zoom = z;
+  }
+
+  try {
+    const d = await fetch('/api/media/meta', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ path: selectedPath, meta }),
+    }).then(r => r.json());
+
+    if (d.ok) {
+      document.getElementById('ed-saved').style.display = '';
+      document.getElementById('ed-error').style.display = 'none';
+      setTimeout(() => { document.getElementById('ed-saved').style.display = 'none'; }, 2500);
+    } else {
+      throw new Error(d.error || 'Save failed');
+    }
+  } catch (e) {
+    document.getElementById('ed-error').textContent = e.message;
+    document.getElementById('ed-error').style.display = '';
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function fmtSize(b) {
+  if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
+  if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
+  return Math.round(b / 1e3) + ' KB';
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadLibrary();
+</script>
+
+<style>
+/* ── Folder groups ────────────────────────────────────────────────────────── */
+.lib-folder { width: 100%; }
+.lib-folder-header {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .35rem .5rem;
+  border-radius: .35rem;
+  color: #8b949e;
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #21262d;
+  margin-bottom: .25rem;
+}
+.lib-folder-header:hover { background: #1c2128; color: #c9d1d9; }
+.lib-folder-header::-webkit-details-marker { display: none; }
+.lib-folder-count {
+  margin-left: auto;
+  background: #21262d;
+  color: #6e7681;
+  border-radius: 2rem;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: 1px 8px;
+}
+
+/* ── Library grid ─────────────────────────────────────────────────────────── */
+.lib-thumb {
+  width: 148px;
+  cursor: pointer;
+  border-radius: .45rem;
+  border: 2px solid transparent;
+  overflow: hidden;
+  background: #161b22;
+  transition: border-color .12s, box-shadow .12s;
+  user-select: none;
+}
+.lib-thumb:hover { border-color: rgba(74,158,255,.45); }
+.lib-thumb.lib-selected { border-color: #4a9eff; }
+.lib-thumb.lib-current  { box-shadow: 0 0 0 2px #28a745; }
+.lib-thumb.lib-selected.lib-current { border-color: #4a9eff; box-shadow: 0 0 0 2px #28a745; }
+
+.lib-thumb-img-wrap {
+  position: relative;
+  width: 148px;
+  height: 94px;
+  overflow: hidden;
+  background: #0d1117;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-thumb-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lib-thumb-img-wrap.no-thumb::before {
+  content: "\F3D1";  /* bi-file-earmark */
+  font-family: "bootstrap-icons";
+  font-size: 2rem;
+  color: #3d444d;
+}
+
+.lib-play-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: rgba(255,255,255,.75);
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgba(0,0,0,.8);
+  background: rgba(0,0,0,.25);
+}
+.lib-now-badge {
+  position: absolute;
+  top: 4px; right: 4px;
+  background: #28a745;
+  color: #fff;
+  font-size: .6rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: .03em;
+}
+.lib-thumb-name {
+  padding: 3px 6px 5px;
+  font-size: .7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #8b949e;
+}
+</style>
+{% endblock %}

@@ -37,7 +37,8 @@ class WeatherOverlay:
 
         line = f"{_ICON_MAP.get(icon_code, '')} {temp}{degree}  {desc}".strip()
 
-        font = get_font(cfg['font_size'])
+        family = cfg.get('font') or self._config.get('fonts', 'global', default='dejavu-bold')
+        font = get_font(cfg['font_size'], family)
         color = parse_color(cfg['color'])
 
         return draw_text_with_bg(

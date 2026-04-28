@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 *.pyo
 .piframe_token.json
+secrets.yaml
 photos/
 *.egg-info/
 .env
+.thumbcache/
+.piframe_state.json

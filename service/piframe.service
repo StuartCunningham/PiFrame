@@ -1,20 +1,27 @@
 [Unit]
 Description=PiFrame Digital Photo Frame
-After=network-online.target
+After=network-online.target graphical.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=pi
-WorkingDirectory=/home/pi/piframe
-ExecStart=/home/pi/piframe/venv/bin/python run.py
+WorkingDirectory=/home/pi/PiFrame
+ExecStart=/home/pi/PiFrame/venv/bin/python /home/pi/PiFrame/run.py
 
-# Required for pygame to access the framebuffer without X11
-Environment=SDL_VIDEODRIVER=kmsdrm
-Environment=SDL_FBDEV=/dev/fb0
+# ── Display environment ────────────────────────────────────────────────────────
+# setup.sh patches XDG_RUNTIME_DIR with the correct UID automatically.
+
+# Wayland desktop session (Pi OS Bookworm — default):
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+# X11 desktop session (Pi OS Bullseye):
+#Environment=DISPLAY=:0
+#Environment=XAUTHORITY=/home/pi/.Xauthority
 
 Restart=on-failure
-RestartSec=10
+RestartSec=5
 
 # Allow access to GPIO / SPI for e-ink display
 SupplementaryGroups=gpio spi i2c video
@@ -23,4 +30,4 @@ StandardOutput=journal
 StandardError=journal
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target

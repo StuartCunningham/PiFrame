@@ -26,6 +26,7 @@ from piframe.slideshow import Slideshow
 def main():
     config = Config('config.yaml')
     state = State()
+    state.load('.piframe_state.json')
 
     # ── OneDrive sync ──────────────────────────────────────────────────────────
     sync = None

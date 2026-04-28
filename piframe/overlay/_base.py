@@ -1,37 +1,72 @@
 """Shared helpers for overlay rendering."""
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 _PADDING = 16
 _LINE_SPACING = 6
 
+# Curated named fonts available on Raspberry Pi OS.
+# Value: (filesystem path, human-readable label)
+FONT_FAMILIES: dict[str, tuple[str, str]] = {
+    'dejavu-bold':       ('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',      'DejaVu Sans Bold'),
+    'dejavu':            ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',            'DejaVu Sans'),
+    'dejavu-serif-bold': ('/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf',     'DejaVu Serif Bold'),
+    'dejavu-serif':      ('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf',          'DejaVu Serif'),
+    'dejavu-mono-bold':  ('/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf',  'DejaVu Mono Bold'),
+    'dejavu-mono':       ('/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',       'DejaVu Mono'),
+    'freesans-bold':     ('/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',       'Free Sans Bold'),
+    'freesans':          ('/usr/share/fonts/truetype/freefont/FreeSans.ttf',           'Free Sans'),
+    'freeserif-bold':    ('/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf',      'Free Serif Bold'),
+    'freeserif':         ('/usr/share/fonts/truetype/freefont/FreeSerif.ttf',          'Free Serif'),
+}
 
-def get_font(size: int) -> ImageFont.FreeTypeFont:
-    """Load a font, falling back to the PIL default if no TTF is available."""
-    candidates = [
-        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-        '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
-        '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-        '/System/Library/Fonts/Helvetica.ttc',
-        'C:/Windows/Fonts/arial.ttf',
-    ]
-    for path in candidates:
+_FONT_CACHE: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+
+
+def available_fonts() -> list[tuple[str, str]]:
+    """Return (key, label) for fonts that exist on disk, in definition order."""
+    return [(k, label) for k, (path, label) in FONT_FAMILIES.items() if Path(path).exists()]
+
+
+def get_font(size: int, family: str = '') -> ImageFont.FreeTypeFont:
+    """Return a PIL font for *family* at *size*, falling back gracefully."""
+    key = (family, size)
+    if key in _FONT_CACHE:
+        return _FONT_CACHE[key]
+
+    font: ImageFont.FreeTypeFont | None = None
+
+    if family in FONT_FAMILIES:
         try:
-            return ImageFont.truetype(path, size)
+            font = ImageFont.truetype(FONT_FAMILIES[family][0], size)
         except (IOError, OSError):
-            continue
-    return ImageFont.load_default()
+            pass
+
+    if font is None:
+        # Try known paths in priority order until one works
+        for path, _ in FONT_FAMILIES.values():
+            try:
+                font = ImageFont.truetype(path, size)
+                break
+            except (IOError, OSError):
+                continue
+
+    if font is None:
+        font = ImageFont.load_default()
+
+    _FONT_CACHE[key] = font
+    return font
 
 
 def parse_color(value) -> tuple:
     if isinstance(value, (list, tuple)):
         return tuple(int(v) for v in value)
-    # CSS name fallback
     _names = {'white': (255, 255, 255), 'black': (0, 0, 0)}
     return _names.get(str(value).lower(), (255, 255, 255))
 
 
 def _text_block_size(draw, lines, fonts):
-    """Return (width, height) of the full text block."""
+    """Return (width, height, per-line heights) of the full text block."""
     widths, heights = [], []
     for line, font in zip(lines, fonts):
         bbox = draw.textbbox((0, 0), line, font=font)
@@ -53,32 +88,26 @@ def draw_text_with_bg(
     bg_opacity: int = 120,
 ) -> Image.Image:
     """Composite multi-line text onto *image* at the given anchor position."""
-    image = image.copy()
-    draw = ImageDraw.Draw(image)
+    base = image.copy().convert('RGBA')
 
-    w, h = image.size
-    block_w, block_h, line_heights = _text_block_size(draw, lines, fonts)
+    _draw = ImageDraw.Draw(base)
+    w, h = base.size
+    block_w, block_h, line_heights = _text_block_size(_draw, lines, fonts)
 
-    # Anchor calculation
     vert, horiz = position.split('-')
     pad = _PADDING
-
-    if vert == 'top':
-        y0 = pad
-    else:
-        y0 = h - block_h - pad
-
+    y0 = pad if vert == 'top' else h - block_h - pad
     if horiz == 'left':
         x0 = pad
     elif horiz == 'right':
         x0 = w - block_w - pad
-    else:  # center
+    else:
         x0 = (w - block_w) // 2
 
-    # Semi-transparent background pill
+    overlay = Image.new('RGBA', base.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+
     if bg:
-        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        odraw = ImageDraw.Draw(overlay)
         margin = 10
         odraw.rounded_rectangle(
             [x0 - margin, y0 - margin,
@@ -86,16 +115,19 @@ def draw_text_with_bg(
             radius=12,
             fill=(0, 0, 0, bg_opacity),
         )
-        image = image.convert('RGBA')
-        image = Image.alpha_composite(image, overlay).convert('RGB')
-        draw = ImageDraw.Draw(image)
 
-    # Draw text lines
+    if shadow:
+        y = y0
+        for line, font, lh in zip(lines, fonts, line_heights):
+            odraw.text((x0 + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
+            y += lh + _LINE_SPACING
+
+    base = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(base)
+
     y = y0
     for line, font, lh in zip(lines, fonts, line_heights):
-        if shadow:
-            draw.text((x0 + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
         draw.text((x0, y), line, font=font, fill=color)
         y += lh + _LINE_SPACING
 
-    return image
+    return base.convert('RGB')
