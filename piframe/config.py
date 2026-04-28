@@ -67,6 +67,7 @@ _SECRET_PATHS = (
     ('web', 'secret_key'),
     ('web', 'password'),
     ('overlays', 'weather', 'api_key'),
+    ('overlays', 'weather', 'location'),
     ('onedrive', 'client_id'),
 )
 
