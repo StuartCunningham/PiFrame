@@ -363,7 +363,7 @@ def create_app(config, state, sync=None):
         all_exts = img_exts | video_exts
 
         if not photo_dir.exists():
-            return jsonify({'files': []})
+            return jsonify({'files': [], 'total': 0, 'page': 1, 'pages': 0})
 
         pattern = '**/*' if cfg.get('recursive', True) else '*'
         files = []
@@ -377,7 +377,22 @@ def create_app(config, state, sync=None):
                     'type': 'video' if is_video else 'photo',
                     'is_current': str(p) == state.current_photo,
                 })
-        return jsonify({'files': files})
+
+        try:
+            per_page = min(int(request.args.get('per_page', 200)), 500)
+            page = max(1, int(request.args.get('page', 1)))
+        except (TypeError, ValueError):
+            per_page, page = 200, 1
+
+        total = len(files)
+        start = (page - 1) * per_page
+        pages = max(1, (total + per_page - 1) // per_page)
+        return jsonify({
+            'files': files[start:start + per_page],
+            'total': total,
+            'page': page,
+            'pages': pages,
+        })
 
     @app.route('/api/library/thumb')
     @login_required

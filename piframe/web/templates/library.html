@@ -317,17 +317,44 @@ let allFiles      = [];
 let selectedPath  = null;
 let selectedType  = null;
 let selectedInfo  = null;
+let _libPage      = 1;
+let _libPages     = 1;
+let _libLoading   = false;
 
 // ── Library ──────────────────────────────────────────────────────────────────
 
-async function loadLibrary() {
+async function loadLibrary(reset) {
+  if (_libLoading) return;
+  if (reset) { allFiles = []; _libPage = 1; _libPages = 1; }
+  _libLoading = true;
   try {
-    const d = await fetch('/api/library').then(r => r.json());
-    allFiles = d.files;
+    const d = await fetch(`/api/library?page=${_libPage}&per_page=200`).then(r => r.json());
+    allFiles = allFiles.concat(d.files);
+    _libPages = d.pages || 1;
     document.getElementById('lib-loading').style.display = 'none';
     renderGrid(allFiles);
+    _updateLoadMore();
   } catch (e) {
     document.getElementById('lib-loading').textContent = 'Failed to load library.';
+  } finally {
+    _libLoading = false;
+  }
+}
+
+function _updateLoadMore() {
+  let btn = document.getElementById('lib-load-more');
+  if (_libPage < _libPages) {
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'lib-load-more';
+      btn.className = 'btn btn-outline-secondary btn-sm w-100 mt-2 flex-shrink-0';
+      btn.onclick = () => { _libPage++; loadLibrary(false); };
+      document.getElementById('lib-grid').insertAdjacentElement('afterend', btn);
+    }
+    btn.textContent = `Load more (page ${_libPage} of ${_libPages})`;
+    btn.style.display = '';
+  } else if (btn) {
+    btn.style.display = 'none';
   }
 }
 
@@ -815,7 +842,7 @@ function fmtSize(b) {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
-loadLibrary();
+loadLibrary(true);
 </script>
 
 <style>

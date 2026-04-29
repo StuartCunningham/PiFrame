@@ -124,12 +124,15 @@ def draw_text_with_bg(
     bg: bool = True,
     bg_opacity: int = 120,
 ) -> Image.Image:
-    """Composite multi-line text onto *image* at the given anchor position."""
-    base = image.copy().convert('RGBA')
+    """Composite multi-line text onto *image* at the given anchor position.
 
-    _draw = ImageDraw.Draw(base)
-    w, h = base.size
+    Only allocates RGBA buffers for the text bounding box, not the full frame.
+    """
+    _meas = Image.new('L', (1, 1))
+    _draw = ImageDraw.Draw(_meas)
+    w, h = image.size
     block_w, block_h, line_heights = _text_block_size(_draw, lines, fonts)
+    del _meas, _draw
 
     vert, horiz = position.split('-')
     pad = _PADDING
@@ -146,30 +149,39 @@ def draw_text_with_bg(
     else:
         x0 = (w - block_w) // 2
 
-    overlay = Image.new('RGBA', base.size, (0, 0, 0, 0))
+    margin = 10
+    rx0 = max(0, x0 - margin - 4)
+    ry0 = max(0, y0 - margin - 4)
+    rx1 = min(w, x0 + block_w + margin + 4)
+    ry1 = min(h, y0 + block_h + margin + 4)
+
+    region = image.crop((rx0, ry0, rx1, ry1)).convert('RGBA')
+    overlay = Image.new('RGBA', region.size, (0, 0, 0, 0))
     odraw = ImageDraw.Draw(overlay)
+    lx0, ly0 = x0 - rx0, y0 - ry0
 
     if bg:
-        margin = 10
         odraw.rounded_rectangle(
-            [x0 - margin, y0 - margin,
-             x0 + block_w + margin, y0 + block_h + margin],
+            [lx0 - margin, ly0 - margin,
+             lx0 + block_w + margin, ly0 + block_h + margin],
             radius=12,
             fill=(0, 0, 0, bg_opacity),
         )
 
     if shadow:
-        y = y0
+        y = ly0
         for line, font, lh in zip(lines, fonts, line_heights):
-            odraw.text((x0 + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
+            odraw.text((lx0 + 2, y + 2), line, font=font, fill=(0, 0, 0, 160))
             y += lh + _LINE_SPACING
 
-    base = Image.alpha_composite(base, overlay)
-    draw = ImageDraw.Draw(base)
+    region = Image.alpha_composite(region, overlay)
+    draw = ImageDraw.Draw(region)
 
-    y = y0
+    y = ly0
     for line, font, lh in zip(lines, fonts, line_heights):
-        draw.text((x0, y), line, font=font, fill=color)
+        draw.text((lx0, y), line, font=font, fill=color)
         y += lh + _LINE_SPACING
 
-    return base.convert('RGB')
+    result = image.copy() if image.mode == 'RGB' else image.convert('RGB')
+    result.paste(region.convert('RGB'), (rx0, ry0))
+    return result

@@ -182,8 +182,8 @@ class Slideshow:
                 _log.info("Command: reload")
                 self._reload_photos()
 
-            # ── Periodic photo-dir reload (every 5 min) ───────────────────────
-            if time.time() - self._last_photo_reload > 300:
+            # ── Periodic photo-dir reload (every 30 min) ──────────────────────
+            if time.time() - self._last_photo_reload > 1800:
                 self._reload_photos()
 
             # ── Display ───────────────────────────────────────────────────────
