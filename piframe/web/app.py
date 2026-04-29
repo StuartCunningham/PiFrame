@@ -221,7 +221,7 @@ def create_app(config, state, sync=None):
         data = request.get_json(silent=True) or {}
         raw = data.get('meta', {})
         _allowed = {'fit_mode', 'caption', 'caption_position', 'caption_font_size',
-                    'skip', 'duration'}
+                    'skip', 'duration', 'custom_scale', 'custom_pan_x', 'custom_pan_y'}
         meta = {}
         for k, v in raw.items():
             if k not in _allowed:
@@ -261,6 +261,14 @@ def create_app(config, state, sync=None):
     def api_fonts():
         from piframe.overlay._base import available_fonts
         return jsonify({'fonts': [{'key': k, 'name': n} for k, n in available_fonts()]})
+
+    @app.route('/api/logs')
+    @login_required
+    def api_logs():
+        from piframe.logbuffer import get_buffer
+        since = int(request.args.get('since', 0))
+        buf = get_buffer()
+        return jsonify({'entries': buf.since(since), 'seq': buf.latest_seq()})
 
     @app.route('/api/sync', methods=['POST'])
     @login_required
@@ -403,7 +411,7 @@ def create_app(config, state, sync=None):
 
         _allowed = {
             'fit_mode', 'caption', 'caption_position', 'caption_font_size',
-            'skip', 'duration',
+            'skip', 'duration', 'custom_scale', 'custom_pan_x', 'custom_pan_y',
             'video_fit', 'video_pan_x', 'video_pan_y', 'video_zoom', 'volume',
         }
         meta = {}

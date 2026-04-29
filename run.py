@@ -12,6 +12,10 @@ logging.basicConfig(
 )
 log = logging.getLogger('piframe')
 
+from piframe.logbuffer import install as _install_logbuffer
+_install_logbuffer()
+logging.captureWarnings(True)   # routes warnings.warn() into the log (catches inky busy-wait timeouts)
+
 # ── Resolve project root so relative paths in config work ─────────────────────
 ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(ROOT)

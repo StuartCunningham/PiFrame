@@ -5,7 +5,7 @@
 <div class="d-flex gap-3" id="lib-layout" style="height:calc(100vh - 100px); min-height:500px;">
 
   <!-- ══ Left: Editor ══════════════════════════════════════════════════════ -->
-  <div class="flex-shrink-0 d-flex flex-column" style="width:360px; overflow-y:auto;">
+  <div class="d-flex flex-column" style="flex: 0 0 58%; min-width: 320px; overflow-y: auto;">
 
     <!-- Preview -->
     <div class="card mb-3 flex-shrink-0">
@@ -49,12 +49,13 @@
         <div class="card-body row g-2 py-2">
           <div class="col-6">
             <label class="form-label small mb-1">Fit mode</label>
-            <select class="form-select form-select-sm" id="ed-fit">
+            <select class="form-select form-select-sm" id="ed-fit" onchange="onPhotoFitChange()">
               <option value="">Global default</option>
               <option value="fill">Fill (crop)</option>
               <option value="fit">Fit (letterbox)</option>
               <option value="stretch">Stretch</option>
               <option value="center">Center</option>
+              <option value="custom">Custom frame</option>
             </select>
           </div>
           <div class="col-6">
@@ -80,6 +81,80 @@
             <input type="number" class="form-control form-control-sm" id="ed-caption-size"
                    min="12" max="120" placeholder="Default">
           </div>
+
+          <!-- Custom frame controls -->
+          <div id="ed-custom-frame" class="col-12" style="display:none;">
+            <hr class="my-2 border-secondary opacity-25">
+            <div class="text-secondary small mb-2 fw-semibold">Custom Frame Transform</div>
+
+            <!-- Preview — drag to pan -->
+            <div class="mb-3">
+              <div id="custom-frame-outer"
+                   style="position:relative; overflow:hidden; background:#0d1117; border-radius:4px; border:1px solid #30363d; cursor:grab; user-select:none;">
+                <img id="custom-frame-img" src="" alt=""
+                     style="position:absolute; object-fit:contain; pointer-events:none;">
+                <!-- White square = display frame boundary -->
+                <div style="position:absolute; inset:0; border:2px solid rgba(255,255,255,0.75); z-index:3; pointer-events:none; border-radius:2px;"></div>
+                <div id="custom-frame-spacer" style="position:relative; z-index:2;"></div>
+              </div>
+              <div class="d-flex justify-content-between mt-1" style="font-size:.68rem; color:#6e7681;">
+                <span>Drag to pan · scroll to scale</span><span>White border = display frame</span>
+              </div>
+            </div>
+
+            <!-- Scale -->
+            <div class="mb-2">
+              <label class="form-label small mb-1">Scale
+                <span class="text-secondary" id="custom-scale-lbl">(1.00×)</span>
+              </label>
+              <div class="d-flex gap-2 align-items-center">
+                <input type="range" class="form-range flex-grow-1" id="ed-custom-scale"
+                       min="0.25" max="4" step="0.05" value="1"
+                       oninput="syncNumFromSlider('ed-custom-scale','ed-custom-scale-n',2); onCustomFrameChange()">
+                <input type="number" class="form-control form-control-sm text-end" id="ed-custom-scale-n"
+                       min="0.25" max="4" step="0.05" style="width:68px;"
+                       oninput="syncSliderFromNum('ed-custom-scale','ed-custom-scale-n'); onCustomFrameChange()">
+              </div>
+              <div id="custom-scale-hint" class="small mt-1" style="display:none; font-size:.7rem; color:#d29922;">
+                Image smaller than display — letterbox bars will appear
+              </div>
+            </div>
+
+            <!-- Pan X -->
+            <div class="mb-2">
+              <label class="form-label small mb-1">Pan X
+                <span class="text-secondary" style="font-size:.7rem;"> left ← → right</span>
+              </label>
+              <div class="d-flex gap-2 align-items-center">
+                <input type="range" class="form-range flex-grow-1" id="ed-custom-pan-x"
+                       min="-1" max="1" step="0.01" value="0"
+                       oninput="syncNumFromSlider('ed-custom-pan-x','ed-custom-pan-x-n',2); onCustomFrameChange()">
+                <input type="number" class="form-control form-control-sm text-end" id="ed-custom-pan-x-n"
+                       min="-1" max="1" step="0.01" style="width:68px;"
+                       oninput="syncSliderFromNum('ed-custom-pan-x','ed-custom-pan-x-n'); onCustomFrameChange()">
+              </div>
+            </div>
+
+            <!-- Pan Y -->
+            <div class="mb-2">
+              <label class="form-label small mb-1">Pan Y
+                <span class="text-secondary" style="font-size:.7rem;"> top ↑ ↓ bottom</span>
+              </label>
+              <div class="d-flex gap-2 align-items-center">
+                <input type="range" class="form-range flex-grow-1" id="ed-custom-pan-y"
+                       min="-1" max="1" step="0.01" value="0"
+                       oninput="syncNumFromSlider('ed-custom-pan-y','ed-custom-pan-y-n',2); onCustomFrameChange()">
+                <input type="number" class="form-control form-control-sm text-end" id="ed-custom-pan-y-n"
+                       min="-1" max="1" step="0.01" style="width:68px;"
+                       oninput="syncSliderFromNum('ed-custom-pan-y','ed-custom-pan-y-n'); onCustomFrameChange()">
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetCustomFrame()">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset frame
+            </button>
+          </div>
+
         </div>
       </div>
 
@@ -235,6 +310,7 @@
 const DISPLAY_W = {{ config.display.hdmi.width }};
 const DISPLAY_H = {{ config.display.hdmi.height }};
 const DISPLAY_AR = DISPLAY_W / DISPLAY_H;
+const CUSTOM_PREV_W = 420;   // preview width for custom frame panel
 
 // ── State ────────────────────────────────────────────────────────────────────
 let allFiles      = [];
@@ -363,6 +439,8 @@ async function selectFile(path, type) {
   const thumb = document.getElementById('ed-thumb');
   thumb.src = '/api/library/thumb?path=' + encodeURIComponent(path);
   thumb.style.display = '';
+  document.getElementById('custom-frame-img').src =
+    '/api/library/thumb?path=' + encodeURIComponent(path);
 
   // Type badge
   const badge = document.getElementById('ed-type-badge');
@@ -400,11 +478,20 @@ async function selectFile(path, type) {
   document.getElementById('ed-skip').checked = !!meta.skip;
 
   if (type === 'photo') {
-    document.getElementById('ed-fit').value         = meta.fit_mode        || '';
-    document.getElementById('ed-duration').value    = meta.duration        || '';
-    document.getElementById('ed-caption').value     = meta.caption         || '';
-    document.getElementById('ed-caption-pos').value = meta.caption_position || 'bottom-center';
-    document.getElementById('ed-caption-size').value= meta.caption_font_size || '';
+    document.getElementById('ed-fit').value          = meta.fit_mode         || '';
+    document.getElementById('ed-duration').value     = meta.duration         || '';
+    document.getElementById('ed-caption').value      = meta.caption          || '';
+    document.getElementById('ed-caption-pos').value  = meta.caption_position || 'bottom-center';
+    document.getElementById('ed-caption-size').value = meta.caption_font_size || '';
+    const cs = meta.custom_scale ?? 1, cpx = meta.custom_pan_x ?? 0, cpy = meta.custom_pan_y ?? 0;
+    document.getElementById('ed-custom-scale').value   = cs;
+    document.getElementById('ed-custom-pan-x').value   = cpx;
+    document.getElementById('ed-custom-pan-y').value   = cpy;
+    document.getElementById('ed-custom-scale-n').value = parseFloat(cs).toFixed(2);
+    document.getElementById('ed-custom-pan-x-n').value = parseFloat(cpx).toFixed(2);
+    document.getElementById('ed-custom-pan-y-n').value = parseFloat(cpy).toFixed(2);
+    onPhotoFitChange();
+    onCustomFrameChange();
   } else {
     document.getElementById('ed-volume').value = meta.volume != null ? meta.volume : '';
 
@@ -424,6 +511,140 @@ async function selectFile(path, type) {
         ' → ' + DISPLAY_W + '\xd7' + DISPLAY_H;
     }
   }
+}
+
+// ── Custom frame (photo) ─────────────────────────────────────────────────────
+
+function onPhotoFitChange() {
+  const fit = document.getElementById('ed-fit').value;
+  const show = fit === 'custom';
+  document.getElementById('ed-custom-frame').style.display = show ? '' : 'none';
+  if (show) updateCustomPreview();
+}
+
+function onCustomFrameChange() {
+  const s  = parseFloat(document.getElementById('ed-custom-scale').value);
+  const px = parseFloat(document.getElementById('ed-custom-pan-x').value);
+  const py = parseFloat(document.getElementById('ed-custom-pan-y').value);
+  document.getElementById('custom-scale-lbl').textContent = '(' + s.toFixed(2) + '\xd7)';
+  // Sync number inputs from sliders (in case called from drag/wheel handler)
+  document.getElementById('ed-custom-scale-n').value  = s.toFixed(2);
+  document.getElementById('ed-custom-pan-x-n').value  = px.toFixed(2);
+  document.getElementById('ed-custom-pan-y-n').value  = py.toFixed(2);
+  // Scale hint
+  document.getElementById('custom-scale-hint').style.display = s < 1 ? '' : 'none';
+  updateCustomPreview();
+}
+
+function updateCustomPreview() {
+  if (!selectedInfo || selectedType !== 'photo') return;
+  const { width: srcW, height: srcH } = selectedInfo;
+
+  const PREV_W = CUSTOM_PREV_W;
+  const PREV_H = Math.round(PREV_W / DISPLAY_AR);
+
+  const outer  = document.getElementById('custom-frame-outer');
+  const img    = document.getElementById('custom-frame-img');
+  const spacer = document.getElementById('custom-frame-spacer');
+
+  outer.style.width  = PREV_W + 'px';
+  spacer.style.height = PREV_H + 'px';
+
+  const scale = parseFloat(document.getElementById('ed-custom-scale').value) || 1;
+  const panX  = parseFloat(document.getElementById('ed-custom-pan-x').value) || 0;
+  const panY  = parseFloat(document.getElementById('ed-custom-pan-y').value) || 0;
+
+  // Baseline: scale image to fit inside the display (letterbox baseline)
+  let baseW = PREV_W, baseH = PREV_H;
+  if (srcW && srcH) {
+    const srcAR = srcW / srcH;
+    if (srcAR > DISPLAY_AR) { baseW = PREV_W; baseH = PREV_W / srcAR; }
+    else                     { baseH = PREV_H; baseW = PREV_H * srcAR; }
+  }
+
+  const imgW = baseW * scale;
+  const imgH = baseH * scale;
+  // Pan fraction maps ±1 → ±half the display width/height
+  const imgL = (PREV_W - imgW) / 2 + panX * PREV_W * 0.5;
+  const imgT = (PREV_H - imgH) / 2 + panY * PREV_H * 0.5;
+
+  img.style.width  = Math.round(imgW) + 'px';
+  img.style.height = Math.round(imgH) + 'px';
+  img.style.left   = Math.round(imgL) + 'px';
+  img.style.top    = Math.round(imgT) + 'px';
+}
+
+function resetCustomFrame() {
+  document.getElementById('ed-custom-scale').value   = 1;
+  document.getElementById('ed-custom-pan-x').value   = 0;
+  document.getElementById('ed-custom-pan-y').value   = 0;
+  document.getElementById('ed-custom-scale-n').value = '1.00';
+  document.getElementById('ed-custom-pan-x-n').value = '0.00';
+  document.getElementById('ed-custom-pan-y-n').value = '0.00';
+  onCustomFrameChange();
+}
+
+// ── Drag-to-pan + scroll-to-scale on the custom preview ──────────────────────
+
+let _cfDrag = null;  // { startX, startY, startPanX, startPanY }
+
+(function attachCustomPreviewEvents() {
+  const outer = document.getElementById('custom-frame-outer');
+
+  outer.addEventListener('mousedown', e => {
+    if (selectedType !== 'photo') return;
+    _cfDrag = {
+      startX:    e.clientX,
+      startY:    e.clientY,
+      startPanX: parseFloat(document.getElementById('ed-custom-pan-x').value) || 0,
+      startPanY: parseFloat(document.getElementById('ed-custom-pan-y').value) || 0,
+    };
+    outer.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!_cfDrag) return;
+    const PREV_H = Math.round(CUSTOM_PREV_W / DISPLAY_AR);
+    const dx =  (e.clientX - _cfDrag.startX) / (CUSTOM_PREV_W * 0.5);
+    const dy =  (e.clientY - _cfDrag.startY) / (PREV_H * 0.5);
+    const newPX = Math.max(-1, Math.min(1, _cfDrag.startPanX + dx));
+    const newPY = Math.max(-1, Math.min(1, _cfDrag.startPanY + dy));
+    document.getElementById('ed-custom-pan-x').value = newPX.toFixed(2);
+    document.getElementById('ed-custom-pan-y').value = newPY.toFixed(2);
+    onCustomFrameChange();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!_cfDrag) return;
+    _cfDrag = null;
+    document.getElementById('custom-frame-outer').style.cursor = 'grab';
+  });
+
+  // Scroll wheel to adjust scale
+  outer.addEventListener('wheel', e => {
+    if (selectedType !== 'photo') return;
+    e.preventDefault();
+    const el = document.getElementById('ed-custom-scale');
+    const delta = e.deltaY < 0 ? 0.05 : -0.05;
+    const newVal = Math.max(0.25, Math.min(4, parseFloat(el.value) + delta));
+    el.value = newVal.toFixed(2);
+    onCustomFrameChange();
+  }, { passive: false });
+})();
+
+// ── Slider ↔ number input sync helpers ───────────────────────────────────────
+
+function syncSliderFromNum(sliderId, numId) {
+  const slider = document.getElementById(sliderId);
+  const v = parseFloat(document.getElementById(numId).value);
+  if (!isNaN(v))
+    slider.value = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
+}
+
+function syncNumFromSlider(sliderId, numId, decimals) {
+  const v = parseFloat(document.getElementById(sliderId).value);
+  document.getElementById(numId).value = v.toFixed(decimals);
 }
 
 // ── Framing controls ─────────────────────────────────────────────────────────
@@ -530,6 +751,14 @@ async function saveMedia() {
   if (selectedType === 'photo') {
     const fit = document.getElementById('ed-fit').value;
     if (fit) meta.fit_mode = fit;
+    if (fit === 'custom') {
+      const s  = +parseFloat(document.getElementById('ed-custom-scale').value).toFixed(3);
+      const px = +parseFloat(document.getElementById('ed-custom-pan-x').value).toFixed(3);
+      const py = +parseFloat(document.getElementById('ed-custom-pan-y').value).toFixed(3);
+      if (!isNaN(s))              meta.custom_scale = s;
+      if (!isNaN(px) && px !== 0) meta.custom_pan_x = px;
+      if (!isNaN(py) && py !== 0) meta.custom_pan_y = py;
+    }
     const dur = parseInt(document.getElementById('ed-duration').value);
     if (!isNaN(dur) && dur > 0) meta.duration = dur;
     const cap = document.getElementById('ed-caption').value.trim();

@@ -14,9 +14,9 @@ display:
     hide_cursor: true
     rotation: 0
     width: 1920
-  mode: eink
+  mode: hdmi
 fonts:
-  global: dejavu-bold
+  global: freesans
 onedrive:
   delete_local_removed: false
   enabled: false
@@ -59,7 +59,7 @@ overlays:
     - 255
     - 255
     - 255
-    enabled: true
+    enabled: false
     font: ''
     font_size: 40
     position: bottom-left
@@ -85,7 +85,7 @@ slideshow:
   - bmp
   - gif
   - webp
-  transition: fade
+  transition: cut
   video:
     enabled: false
     formats:

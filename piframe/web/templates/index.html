@@ -93,12 +93,13 @@
           <div class="row g-2">
             <div class="col-6">
               <label class="form-label small mb-1">Fit mode</label>
-              <select class="form-select form-select-sm" id="meta-fit">
+              <select class="form-select form-select-sm" id="meta-fit" onchange="onMetaFitChange()">
                 <option value="">Global default</option>
                 <option value="fill">Fill (crop to cover)</option>
                 <option value="fit">Fit (letterbox)</option>
                 <option value="stretch">Stretch</option>
                 <option value="center">Center (no scale)</option>
+                <option value="custom">Custom frame</option>
               </select>
             </div>
             <div class="col-6">
@@ -126,6 +127,57 @@
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="meta-skip">
                 <label class="form-check-label small" for="meta-skip">Skip this photo</label>
+              </div>
+            </div>
+
+            <!-- Custom frame controls (shown when fit = custom) -->
+            <div id="meta-custom-frame" class="col-12" style="display:none;">
+              <hr class="my-2 border-secondary opacity-25">
+              <div class="text-secondary small fw-semibold mb-2">Custom Frame</div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">Scale
+                  <span class="text-secondary" id="meta-custom-scale-lbl">(1.00×)</span>
+                </label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="range" class="form-range flex-grow-1" id="meta-custom-scale"
+                         min="0.25" max="4" step="0.05" value="1"
+                         oninput="onMetaCustomChange()">
+                  <input type="number" class="form-control form-control-sm text-end" id="meta-custom-scale-n"
+                         min="0.25" max="4" step="0.05" style="width:68px;"
+                         oninput="syncSliderFromNum('meta-custom-scale','meta-custom-scale-n'); onMetaCustomChange()">
+                </div>
+                <div id="meta-custom-scale-hint" class="small mt-1" style="display:none; font-size:.7rem; color:#d29922;">
+                  Image smaller than display — letterbox bars will appear
+                </div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">Pan X
+                  <span class="text-secondary" style="font-size:.7rem;"> left ← → right</span>
+                </label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="range" class="form-range flex-grow-1" id="meta-custom-pan-x"
+                         min="-1" max="1" step="0.01" value="0"
+                         oninput="onMetaCustomChange()">
+                  <input type="number" class="form-control form-control-sm text-end" id="meta-custom-pan-x-n"
+                         min="-1" max="1" step="0.01" style="width:68px;"
+                         oninput="syncSliderFromNum('meta-custom-pan-x','meta-custom-pan-x-n'); onMetaCustomChange()">
+                </div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label small mb-1">Pan Y
+                  <span class="text-secondary" style="font-size:.7rem;"> top ↑ ↓ bottom</span>
+                </label>
+                <div class="d-flex gap-2 align-items-center">
+                  <input type="range" class="form-range flex-grow-1" id="meta-custom-pan-y"
+                         min="-1" max="1" step="0.01" value="0"
+                         oninput="onMetaCustomChange()">
+                  <input type="number" class="form-control form-control-sm text-end" id="meta-custom-pan-y-n"
+                         min="-1" max="1" step="0.01" style="width:68px;"
+                         oninput="syncSliderFromNum('meta-custom-pan-y','meta-custom-pan-y-n'); onMetaCustomChange()">
+                </div>
               </div>
             </div>
           </div>
@@ -161,6 +213,30 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live log card -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-terminal"></i> Live Log</span>
+        <div class="d-flex align-items-center gap-2">
+          <span id="log-status" class="text-secondary small"></span>
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="log-autoscroll" checked>
+            <label class="form-check-label small" for="log-autoscroll">Auto-scroll</label>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary py-0" onclick="clearLog()">Clear</button>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div id="log-container" style="height:220px;overflow-y:auto;font-family:monospace;font-size:0.78rem;background:#0d1117;">
+          <table class="table table-sm mb-0" id="log-table" style="border-collapse:collapse;">
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -240,15 +316,56 @@
       document.getElementById('meta-caption').value = d.meta.caption || '';
       document.getElementById('meta-caption-pos').value = d.meta.caption_position || 'bottom-center';
       document.getElementById('meta-skip').checked = !!d.meta.skip;
+      // Custom frame
+      const cs = d.meta.custom_scale ?? 1, cpx = d.meta.custom_pan_x ?? 0, cpy = d.meta.custom_pan_y ?? 0;
+      document.getElementById('meta-custom-scale').value   = cs;
+      document.getElementById('meta-custom-pan-x').value   = cpx;
+      document.getElementById('meta-custom-pan-y').value   = cpy;
+      document.getElementById('meta-custom-scale-n').value = parseFloat(cs).toFixed(2);
+      document.getElementById('meta-custom-pan-x-n').value = parseFloat(cpx).toFixed(2);
+      document.getElementById('meta-custom-pan-y-n').value = parseFloat(cpy).toFixed(2);
+      onMetaFitChange();
+      onMetaCustomChange();
       noPhoto.style.display = 'none';
       form.style.display = '';
     } catch (e) {}
+  }
+
+  function onMetaFitChange() {
+    const fit = document.getElementById('meta-fit').value;
+    document.getElementById('meta-custom-frame').style.display = fit === 'custom' ? '' : 'none';
+  }
+
+  function onMetaCustomChange() {
+    const s  = parseFloat(document.getElementById('meta-custom-scale').value);
+    const px = parseFloat(document.getElementById('meta-custom-pan-x').value);
+    const py = parseFloat(document.getElementById('meta-custom-pan-y').value);
+    document.getElementById('meta-custom-scale-lbl').textContent = '(' + s.toFixed(2) + '\xd7)';
+    document.getElementById('meta-custom-scale-n').value  = s.toFixed(2);
+    document.getElementById('meta-custom-pan-x-n').value  = px.toFixed(2);
+    document.getElementById('meta-custom-pan-y-n').value  = py.toFixed(2);
+    document.getElementById('meta-custom-scale-hint').style.display = s < 1 ? '' : 'none';
+  }
+
+  function syncSliderFromNum(sliderId, numId) {
+    const slider = document.getElementById(sliderId);
+    const v = parseFloat(document.getElementById(numId).value);
+    if (!isNaN(v))
+      slider.value = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), v));
   }
 
   async function saveMeta() {
     const meta = {};
     const fit = document.getElementById('meta-fit').value;
     if (fit) meta.fit_mode = fit;
+    if (fit === 'custom') {
+      const s  = +parseFloat(document.getElementById('meta-custom-scale').value).toFixed(3);
+      const px = +parseFloat(document.getElementById('meta-custom-pan-x').value).toFixed(3);
+      const py = +parseFloat(document.getElementById('meta-custom-pan-y').value).toFixed(3);
+      if (!isNaN(s))              meta.custom_scale = s;
+      if (!isNaN(px) && px !== 0) meta.custom_pan_x = px;
+      if (!isNaN(py) && py !== 0) meta.custom_pan_y = py;
+    }
     const dur = parseInt(document.getElementById('meta-duration').value);
     if (!isNaN(dur) && dur > 0) meta.duration = dur;
     const caption = document.getElementById('meta-caption').value.trim();
@@ -286,5 +403,54 @@
 
   fetchStatus();
   setInterval(fetchStatus, 5000);
+
+  // ── Live log ──────────────────────────────────────────────────────────────
+  let _logSeq = 0;
+  const _levelColor = {
+    ERROR:    '#f85149',
+    WARNING:  '#d29922',
+    INFO:     '#8b949e',
+    DEBUG:    '#484f58',
+  };
+
+  function clearLog() {
+    document.getElementById('log-body').innerHTML = '';
+  }
+
+  async function fetchLogs() {
+    try {
+      const r = await fetch('/api/logs?since=' + _logSeq);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.entries && d.entries.length) {
+        const tbody = document.getElementById('log-body');
+        const container = document.getElementById('log-container');
+        const autoscroll = document.getElementById('log-autoscroll').checked;
+        for (const e of d.entries) {
+          const color = _levelColor[e.level] || '#8b949e';
+          const tr = document.createElement('tr');
+          tr.style.borderBottom = '1px solid #21262d';
+          tr.innerHTML =
+            `<td style="color:#484f58;white-space:nowrap;padding:1px 6px;vertical-align:top">${e.t}</td>` +
+            `<td style="color:${color};white-space:nowrap;padding:1px 4px;vertical-align:top;font-weight:600">${e.level}</td>` +
+            `<td style="color:#6e7681;white-space:nowrap;padding:1px 4px;vertical-align:top">${e.name}</td>` +
+            `<td style="color:#c9d1d9;padding:1px 6px 1px 4px;vertical-align:top;word-break:break-word">${escHtml(e.msg)}</td>`;
+          tbody.appendChild(tr);
+        }
+        if (autoscroll) {
+          container.scrollTop = container.scrollHeight;
+        }
+        document.getElementById('log-status').textContent = 'seq ' + d.seq;
+      }
+      _logSeq = d.seq;
+    } catch (e) {}
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  fetchLogs();
+  setInterval(fetchLogs, 2000);
 </script>
 {% endblock %}

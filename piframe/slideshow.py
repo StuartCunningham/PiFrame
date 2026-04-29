@@ -32,8 +32,9 @@ def _load_meta(image_path: str) -> dict:
     return {}
 
 
-def _load_image(path: str, size: tuple, fit_mode: str,
-                bg_color: tuple) -> Image.Image:
+def _load_image(path: str, size: tuple, fit_mode: str, bg_color: tuple,
+                custom_scale: float = 1.0, custom_pan_x: float = 0.0,
+                custom_pan_y: float = 0.0) -> Image.Image:
     img = Image.open(path).convert('RGB')
     img = ImageOps.exif_transpose(img)
 
@@ -56,6 +57,20 @@ def _load_image(path: str, size: tuple, fit_mode: str,
 
     elif fit_mode == 'stretch':
         img = img.resize((tw, th), Image.LANCZOS)
+
+    elif fit_mode == 'custom':
+        # Fit baseline then apply per-image scale + pan offsets.
+        # custom_scale=1 reproduces letterbox; >1 zooms in, <1 zooms out.
+        # custom_pan_x/y: ±1 shifts image by ±half display width/height.
+        base = min(tw / iw, th / ih)
+        s = max(0.01, base * custom_scale)
+        rw, rh = max(1, int(iw * s)), max(1, int(ih * s))
+        img = img.resize((rw, rh), Image.LANCZOS)
+        cx = (tw - rw) // 2 + int(custom_pan_x * tw * 0.5)
+        cy = (th - rh) // 2 + int(custom_pan_y * th * 0.5)
+        canvas = Image.new('RGB', (tw, th), bg_color)
+        canvas.paste(img, (cx, cy))
+        img = canvas
 
     else:  # center
         canvas = Image.new('RGB', (tw, th), bg_color)
@@ -146,10 +161,13 @@ class Slideshow:
             # ── Commands from web UI ──────────────────────────────────────────
             cmd = self._state.pop_command()
             if cmd == 'next':
+                _log.info("Command: next")
                 self._advance(+1)
             elif cmd == 'prev':
+                _log.info("Command: prev")
                 self._advance(-1)
             elif cmd == 'reload':
+                _log.info("Command: reload")
                 self._reload_photos()
 
             # ── Periodic photo-dir reload (every 5 min) ───────────────────────
@@ -183,6 +201,7 @@ class Slideshow:
             return 0.0
 
         self._state.current_photo = path
+        _log.info("Displaying: %s", os.path.basename(path))
 
         if Path(path).suffix.lower() in VIDEO_EXT:
             return self._show_video(path, meta)
@@ -193,7 +212,12 @@ class Slideshow:
         fit_mode = meta.get('fit_mode') or cfg_sl['fit_mode']
 
         try:
-            img = _load_image(path, self._display.size, fit_mode, bg)
+            img = _load_image(
+                path, self._display.size, fit_mode, bg,
+                custom_scale=float(meta.get('custom_scale', 1.0)),
+                custom_pan_x=float(meta.get('custom_pan_x', 0.0)),
+                custom_pan_y=float(meta.get('custom_pan_y', 0.0)),
+            )
             img = self._overlay.apply(img, path, meta)
             transition = cfg_sl.get('transition', 'cut')
             self._display.show(img, transition)
