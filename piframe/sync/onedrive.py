@@ -13,6 +13,7 @@ GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
 SCOPES = ['Files.Read', 'offline_access']
 IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/gif', 'image/bmp',
                'image/webp', 'image/tiff'}
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff'}
 
 
 class OneDriveSync:
@@ -124,6 +125,7 @@ class OneDriveSync:
     def _sync_folder(self, headers, folder_path: str, local_dir: Path,
                      depth: int = 0) -> int:
         synced = 0
+        remote_names: set[str] = set()
         url = f"{GRAPH_BASE}/me/drive/root:{folder_path}:/children"
 
         while url:
@@ -145,6 +147,7 @@ class OneDriveSync:
                     continue
 
                 name = item['name']
+                remote_names.add(name)
                 local_path = local_dir / name
                 remote_size = item.get('size', -1)
 
@@ -163,6 +166,11 @@ class OneDriveSync:
                     synced += 1
 
             url = data.get('@odata.nextLink')
+
+        if self._config.onedrive.get('delete_local_removed'):
+            for f in local_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in _IMAGE_EXTS and f.name not in remote_names:
+                    f.unlink()
 
         return synced
 

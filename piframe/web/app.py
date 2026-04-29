@@ -15,6 +15,32 @@ from pathlib import Path
 # ── Thumbnail cache ───────────────────────────────────────────────────────────
 _THUMB_CACHE = Path('.thumbcache')
 _THUMB_SIZE  = (400, 300)   # max thumbnail dimensions
+_THUMB_MAX_BYTES = 100 * 1024 * 1024  # 100 MB cap
+
+
+def _prune_thumb_cache():
+    """Delete oldest thumbnails until the cache is under _THUMB_MAX_BYTES."""
+    if not _THUMB_CACHE.exists():
+        return
+    entries = sorted(_THUMB_CACHE.glob('*.jpg'), key=lambda p: p.stat().st_mtime)
+    total = sum(p.stat().st_size for p in entries)
+    for p in entries:
+        if total <= _THUMB_MAX_BYTES:
+            break
+        total -= p.stat().st_size
+        p.unlink(missing_ok=True)
+
+
+def _meta_file(p: Path, *, write: bool = False) -> Path:
+    """Return the metadata Path for image *p* (filename.json style).
+    In read mode falls back to the old stem.json if the new path doesn't exist yet.
+    """
+    new = p.parent / (p.name + '.json')
+    if not write and not new.exists():
+        old = p.parent / (p.stem + '.json')
+        if old.exists():
+            return old
+    return new
 
 def _make_thumbnail(p: Path) -> bytes | None:
     """Generate a JPEG thumbnail for any supported file. Returns bytes or None."""
@@ -62,6 +88,7 @@ def _get_thumbnail(p: Path) -> bytes | None:
 from flask import (Flask, render_template, redirect, url_for, request,
                    jsonify, session, flash, send_file, abort)
 from PIL import Image, ImageOps
+from flask_wtf.csrf import CSRFProtect
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -72,6 +99,8 @@ def _is_hash(s: str) -> bool:
 def create_app(config, state, sync=None):
     app = Flask(__name__, template_folder='templates')
     app.secret_key = config.web.get('secret_key', 'piframe-secret')
+    CSRFProtect(app)
+    _prune_thumb_cache()
 
     # ── Auth middleware ───────────────────────────────────────────────────────
 
@@ -217,7 +246,7 @@ def create_app(config, state, sync=None):
         path = state.current_photo
         if not path:
             return jsonify({'path': None, 'meta': {}})
-        meta_file = Path(path).parent / (Path(path).stem + '.json')
+        meta_file = _meta_file(Path(path))
         meta = {}
         if meta_file.exists():
             try:
@@ -245,7 +274,7 @@ def create_app(config, state, sync=None):
             if isinstance(v, str) and not v.strip():
                 continue
             meta[k] = v
-        meta_file = Path(path).parent / (Path(path).stem + '.json')
+        meta_file = _meta_file(Path(path), write=True)
         if meta:
             meta_file.write_text(json.dumps(meta, indent=2))
         elif meta_file.exists():
@@ -425,7 +454,7 @@ def create_app(config, state, sync=None):
             p.relative_to(photo_dir)
         except ValueError:
             abort(403)
-        meta_file = p.parent / (p.stem + '.json')
+        meta_file = _meta_file(p)
         meta = {}
         if meta_file.exists():
             try:
@@ -461,7 +490,7 @@ def create_app(config, state, sync=None):
                 continue
             meta[k] = v
 
-        meta_file = p.parent / (p.stem + '.json')
+        meta_file = _meta_file(p, write=True)
         if meta:
             meta_file.write_text(json.dumps(meta, indent=2))
         elif meta_file.exists():

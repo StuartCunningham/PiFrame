@@ -15,6 +15,7 @@
       {% endif %}
     {% endwith %}
     <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3">
         <input type="password" class="form-control" name="password"
                placeholder="Password" autofocus autocomplete="current-password">

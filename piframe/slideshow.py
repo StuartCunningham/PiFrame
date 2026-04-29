@@ -19,14 +19,24 @@ VIDEO_EXT = {'.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'}
 
 def _meta_path(image_path: str) -> Path:
     p = Path(image_path)
-    return p.parent / (p.stem + '.json')
+    return p.parent / (p.name + '.json')
 
 
 def _load_meta(image_path: str) -> dict:
-    mp = _meta_path(image_path)
-    if mp.exists():
+    new_path = _meta_path(image_path)
+    if new_path.exists():
         try:
-            return json.loads(mp.read_text())
+            return json.loads(new_path.read_text())
+        except Exception:
+            pass
+    # Migrate from old stem-based path (photo.json → photo.jpg.json)
+    old_path = Path(image_path).parent / (Path(image_path).stem + '.json')
+    if old_path.exists():
+        try:
+            data = json.loads(old_path.read_text())
+            new_path.write_text(json.dumps(data, indent=2))
+            old_path.unlink()
+            return data
         except Exception:
             pass
     return {}

@@ -1,4 +1,5 @@
 """Shared helpers for overlay rendering."""
+import subprocess
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
@@ -21,11 +22,41 @@ FONT_FAMILIES: dict[str, tuple[str, str]] = {
 }
 
 _FONT_CACHE: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
+_FC_FONTS: dict[str, tuple[str, str]] = {}   # key -> (path, label) for fc-list discovered fonts
+_FC_SCANNED = False
+
+
+def _scan_system_fonts():
+    """Populate _FC_FONTS once via fc-list, ignoring paths already in FONT_FAMILIES."""
+    global _FC_SCANNED
+    if _FC_SCANNED:
+        return
+    _FC_SCANNED = True
+    try:
+        result = subprocess.run(
+            ['fc-list', '--format', '%{file}\n'],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return
+        known_paths = {path for path, _ in FONT_FAMILIES.values()}
+        for line in result.stdout.splitlines():
+            p = line.strip()
+            if not p or p in known_paths or not p.lower().endswith(('.ttf', '.otf')):
+                continue
+            key = f'fc:{Path(p).stem}'
+            if key not in _FC_FONTS:
+                _FC_FONTS[key] = (p, Path(p).stem)
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
 
 
 def available_fonts() -> list[tuple[str, str]]:
-    """Return (key, label) for fonts that exist on disk, in definition order."""
-    return [(k, label) for k, (path, label) in FONT_FAMILIES.items() if Path(path).exists()]
+    """Return (key, label) for all available fonts: curated list + fc-list discoveries."""
+    _scan_system_fonts()
+    curated = [(k, label) for k, (path, label) in FONT_FAMILIES.items() if Path(path).exists()]
+    extra = [(k, label) for k, (_, label) in _FC_FONTS.items()]
+    return curated + extra
 
 
 def get_font(size: int, family: str = '') -> ImageFont.FreeTypeFont:
@@ -39,6 +70,12 @@ def get_font(size: int, family: str = '') -> ImageFont.FreeTypeFont:
     if family in FONT_FAMILIES:
         try:
             font = ImageFont.truetype(FONT_FAMILIES[family][0], size)
+        except (IOError, OSError):
+            pass
+
+    if font is None and family in _FC_FONTS:
+        try:
+            font = ImageFont.truetype(_FC_FONTS[family][0], size)
         except (IOError, OSError):
             pass
 

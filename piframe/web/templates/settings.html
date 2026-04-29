@@ -12,6 +12,7 @@
 
 {% block content %}
 <form method="post" action="/settings">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
 <!-- Tab navigation -->
 <ul class="nav nav-tabs mb-4" id="settingsTabs" role="tablist">
