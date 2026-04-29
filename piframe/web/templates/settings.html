@@ -2,12 +2,17 @@
 {% block title %}Settings — PiFrame{% endblock %}
 
 {% macro font_select(field_name, current_val, include_global_opt=true) %}
-<select class="form-select form-select-sm" name="{{ field_name }}">
-  {% if include_global_opt %}<option value="">Global default</option>{% endif %}
-  {% for key, label in fonts %}
-  <option value="{{ key }}" {% if current_val == key %}selected{% endif %}>{{ label }}</option>
-  {% endfor %}
-</select>
+<div class="font-select-wrap">
+  <select class="form-select form-select-sm" name="{{ field_name }}"
+          onchange="updateFontPreview(this)">
+    {% if include_global_opt %}<option value="">Global default</option>{% endif %}
+    {% for key, label in fonts %}
+    <option value="{{ key }}" {% if current_val == key %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <img class="font-preview" alt=""
+       style="height:24px; display:block; margin-top:5px; opacity:.8; border-radius:3px;">
+</div>
 {% endmacro %}
 
 {% block content %}
@@ -839,5 +844,12 @@
       btn.innerHTML = '<i class="bi bi-cloud-download"></i> Update from GitHub';
     }
   }
+
+  // ── Font previews ─────────────────────────────────────────────────────────
+  function updateFontPreview(sel) {
+    const img = sel.parentElement.querySelector('.font-preview');
+    if (img) img.src = '/api/fonts/preview?key=' + encodeURIComponent(sel.value);
+  }
+  document.querySelectorAll('.font-select-wrap select').forEach(updateFontPreview);
 </script>
 {% endblock %}

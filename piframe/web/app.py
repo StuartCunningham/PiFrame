@@ -17,6 +17,9 @@ _THUMB_CACHE = Path('.thumbcache')
 _THUMB_SIZE  = (400, 300)   # max thumbnail dimensions
 _THUMB_MAX_BYTES = 100 * 1024 * 1024  # 100 MB cap
 
+# ── Font preview cache (in-memory, keyed by font family key) ──────────────────
+_font_preview_cache: dict[str, bytes] = {}
+
 
 def _prune_thumb_cache():
     """Delete oldest thumbnails until the cache is under _THUMB_MAX_BYTES."""
@@ -347,6 +350,31 @@ def create_app(config, state, sync=None):
     def api_fonts():
         from piframe.overlay._base import available_fonts
         return jsonify({'fonts': [{'key': k, 'name': n} for k, n in available_fonts()]})
+
+    @app.route('/api/fonts/preview')
+    @login_required
+    def api_fonts_preview():
+        from flask import Response
+        from piframe.overlay._base import get_font
+        from PIL import ImageDraw
+
+        # Resolve empty key to the configured global font
+        key = request.args.get('key', '') or config.fonts.get('global', 'dejavu-bold') or 'dejavu-bold'
+
+        if key not in _font_preview_cache:
+            try:
+                font = get_font(22, key)
+            except Exception:
+                font = get_font(22, 'dejavu-bold')
+            img = Image.new('RGBA', (240, 32), (0, 0, 0, 0))
+            ImageDraw.Draw(img).text((4, 4), 'AaBbCc 123', font=font, fill=(201, 209, 217, 255))
+            buf = io.BytesIO()
+            img.save(buf, format='PNG', optimize=True)
+            _font_preview_cache[key] = buf.getvalue()
+
+        resp = Response(_font_preview_cache[key], mimetype='image/png')
+        resp.headers['Cache-Control'] = 'public, max-age=3600'
+        return resp
 
     @app.route('/api/logs')
     @login_required
