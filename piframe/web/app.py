@@ -302,25 +302,43 @@ def create_app(config, state, sync=None):
     @app.route('/api/system/update', methods=['POST'])
     @login_required
     def api_system_update():
+        import sys
         root = Path(__file__).resolve().parent.parent.parent
         if not (root / '.git').exists():
             return jsonify({'ok': False, 'error': 'Not a git repository'}), 400
         try:
-            result = subprocess.run(
+            pull = subprocess.run(
                 ['git', 'pull'],
                 cwd=str(root),
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
+            if pull.returncode != 0:
+                return jsonify({'ok': False, 'stdout': pull.stdout, 'stderr': pull.stderr,
+                                'changed': False})
+
+            changed = 'Already up to date' not in pull.stdout
+            pip_out = ''
+            if changed and 'requirements.txt' in pull.stdout:
+                pip = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'],
+                    cwd=str(root),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                pip_out = pip.stdout + pip.stderr
+
             return jsonify({
-                'ok': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'changed': 'Already up to date' not in result.stdout,
+                'ok': True,
+                'stdout': pull.stdout,
+                'stderr': pull.stderr,
+                'changed': changed,
+                'pip_output': pip_out,
             })
         except subprocess.TimeoutExpired:
-            return jsonify({'ok': False, 'error': 'git pull timed out'}), 504
+            return jsonify({'ok': False, 'error': 'Update timed out'}), 504
         except FileNotFoundError:
             return jsonify({'ok': False, 'error': 'git not found on this system'}), 500
 

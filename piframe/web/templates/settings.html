@@ -814,15 +814,19 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pulling…';
     out.style.display = 'none';
     try {
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating…';
       const resp = await fetch('/api/system/update', {method: 'POST'});
       const data = await resp.json();
-      const text = [data.stdout, data.stderr].filter(Boolean).join('\n').trim();
+      const text = [data.stdout, data.stderr,
+                    data.pip_output ? '— pip install —\n' + data.pip_output : '']
+                   .filter(Boolean).join('\n').trim();
       pre.textContent = text || '(no output)';
       out.style.display = '';
       if (!data.ok) {
         msg.innerHTML = `<span class="text-danger">Update failed. ${data.error || ''}</span>`;
       } else if (data.changed) {
-        msg.innerHTML = '<span class="text-success">Changes pulled — restart PiFrame to apply.</span>';
+        const pipNote = data.pip_output ? ' New packages installed.' : '';
+        msg.innerHTML = `<span class="text-success">Changes pulled.${pipNote} Restart PiFrame to apply.</span>`;
       } else {
         msg.innerHTML = '<span class="text-secondary">Already up to date.</span>';
       }
