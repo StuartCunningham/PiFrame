@@ -9,3 +9,5 @@ photos/
 .env
 .thumbcache/
 .piframe_state.json
+*.tmp
+.claude/

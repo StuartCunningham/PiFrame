@@ -45,7 +45,8 @@ class OneDriveSync:
     def _save_cache(self):
         if self._token_cache.has_state_changed:
             path = self._config.onedrive.get('token_file', '.piframe_token.json')
-            with open(path, 'w') as f:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as f:
                 f.write(self._token_cache.serialize())
 
     def _get_token(self) -> str | None:
@@ -152,11 +153,13 @@ class OneDriveSync:
 
                 dl_url = item.get('@microsoft.graph.downloadUrl')
                 if dl_url:
+                    tmp_path = local_path.with_suffix(local_path.suffix + '.tmp')
                     r = requests.get(dl_url, stream=True, timeout=60)
                     r.raise_for_status()
-                    with open(local_path, 'wb') as f:
+                    with open(tmp_path, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=65536):
                             f.write(chunk)
+                    os.replace(tmp_path, local_path)
                     synced += 1
 
             url = data.get('@odata.nextLink')

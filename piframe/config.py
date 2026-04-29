@@ -1,5 +1,6 @@
 import copy
 import os
+import uuid
 import yaml
 
 _DEFAULTS = {
@@ -111,6 +112,19 @@ class Config:
         self._secrets_path = secrets_path
         self._data = copy.deepcopy(_DEFAULTS)
         self.load()
+        self._ensure_secret_key()
+
+    def _ensure_secret_key(self):
+        """Replace the shipped default secret_key with a random UUID on first run."""
+        if self._data['web'].get('secret_key') == 'change-me-please':
+            self._data['web']['secret_key'] = str(uuid.uuid4())
+            secrets = {}
+            for path in _SECRET_PATHS:
+                val = _get_nested(self._data, path)
+                if val is not None:
+                    _set_nested(secrets, path, val)
+            with open(self._secrets_path, 'w') as f:
+                yaml.dump(secrets, f, default_flow_style=False, allow_unicode=True)
 
     def load(self):
         if os.path.exists(self._path):
@@ -163,21 +177,21 @@ class Config:
         self.save()
         self.save_secrets()
 
-    # Convenience accessors
+    # Convenience accessors — return copies so callers can't mutate internal state
     @property
-    def display(self): return self._data['display']
+    def display(self): return copy.deepcopy(self._data['display'])
     @property
-    def slideshow(self): return self._data['slideshow']
+    def slideshow(self): return copy.deepcopy(self._data['slideshow'])
     @property
-    def onedrive(self): return self._data['onedrive']
+    def onedrive(self): return copy.deepcopy(self._data['onedrive'])
     @property
-    def overlays(self): return self._data['overlays']
+    def overlays(self): return copy.deepcopy(self._data['overlays'])
     @property
-    def schedule(self): return self._data['schedule']
+    def schedule(self): return copy.deepcopy(self._data['schedule'])
     @property
-    def web(self): return self._data['web']
+    def web(self): return copy.deepcopy(self._data['web'])
     @property
-    def fonts(self): return self._data.get('fonts', {})
+    def fonts(self): return copy.deepcopy(self._data.get('fonts', {}))
 
     def as_dict(self):
         return copy.deepcopy(self._data)

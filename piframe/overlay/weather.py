@@ -8,8 +8,15 @@ from ._base import get_font, parse_color, draw_text_with_bg
 
 # Map OWM icon codes to simple unicode symbols (fallback when icon disabled)
 _ICON_MAP = {
-    '01': '☀', '02': '⛅', '03': '☁', '04': '☁',
-    '09': '🌧', '10': '🌦', '11': '⛈', '13': '❄', '50': '🌫',
+    '01': '☀',   # ☀ sun
+    '02': '⛅',   # ⛅ sun behind cloud
+    '03': '☁',   # ☁ cloud
+    '04': '☁',   # ☁ cloud
+    '09': '☂',   # ☂ rain/umbrella
+    '10': '☂',   # ☂ light rain
+    '11': '⚡',   # ⚡ thunderstorm
+    '13': '❄',   # ❄ snowflake
+    '50': '≈',   # ≈ mist/fog
 }
 
 
@@ -52,13 +59,13 @@ class WeatherOverlay:
     def _maybe_refresh(self, cfg):
         interval = cfg.get('update_interval', 1800)
         now = time.time()
-        if now - self._last_fetch < interval:
-            return
-        if not cfg.get('api_key') or not cfg.get('location'):
-            return
-
+        with self._lock:
+            if now - self._last_fetch < interval:
+                return
+            if not cfg.get('api_key') or not cfg.get('location'):
+                return
+            self._last_fetch = now
         threading.Thread(target=self._fetch, args=(cfg,), daemon=True).start()
-        self._last_fetch = now
 
     def _fetch(self, cfg):
         try:

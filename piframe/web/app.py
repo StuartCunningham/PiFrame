@@ -62,6 +62,11 @@ def _get_thumbnail(p: Path) -> bytes | None:
 from flask import (Flask, render_template, redirect, url_for, request,
                    jsonify, session, flash, send_file, abort)
 from PIL import Image, ImageOps
+from werkzeug.security import check_password_hash, generate_password_hash
+
+
+def _is_hash(s: str) -> bool:
+    return s.startswith(('pbkdf2:', 'scrypt:'))
 
 
 def create_app(config, state, sync=None):
@@ -82,7 +87,11 @@ def create_app(config, state, sync=None):
     @app.route('/login', methods=['GET', 'POST'])
     def login():
         if request.method == 'POST':
-            if request.form.get('password') == config.web.get('password', ''):
+            stored = config.web.get('password', '')
+            entered = request.form.get('password', '')
+            ok = (check_password_hash(stored, entered)
+                  if _is_hash(stored) else entered == stored)
+            if ok:
                 session['authenticated'] = True
                 return redirect(url_for('index'))
             flash('Incorrect password.')
@@ -142,7 +151,12 @@ def create_app(config, state, sync=None):
     def api_sysinfo():
         hostname = socket.gethostname()
         try:
-            ip = socket.gethostbyname(socket.getfqdn())
+            addrs = socket.getaddrinfo(hostname, None)
+            ip = next(
+                (a[4][0] for a in addrs
+                 if not a[4][0].startswith('127.') and a[4][0] != '::1'),
+                'unknown',
+            )
         except Exception:
             ip = 'unknown'
         disk = shutil.disk_usage('/')
@@ -255,6 +269,31 @@ def create_app(config, state, sync=None):
             subprocess.run(['sudo', '/usr/bin/systemctl', 'reboot'])
         threading.Thread(target=_do, daemon=True).start()
         return jsonify({'ok': True})
+
+    @app.route('/api/system/update', methods=['POST'])
+    @login_required
+    def api_system_update():
+        root = Path(__file__).resolve().parent.parent.parent
+        if not (root / '.git').exists():
+            return jsonify({'ok': False, 'error': 'Not a git repository'}), 400
+        try:
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            return jsonify({
+                'ok': result.returncode == 0,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'changed': 'Already up to date' not in result.stdout,
+            })
+        except subprocess.TimeoutExpired:
+            return jsonify({'ok': False, 'error': 'git pull timed out'}), 504
+        except FileNotFoundError:
+            return jsonify({'ok': False, 'error': 'git not found on this system'}), 500
 
     @app.route('/api/fonts')
     @login_required
@@ -494,6 +533,15 @@ def create_app(config, state, sync=None):
 
 # ── Settings form parser ───────────────────────────────────────────────────────
 
+def _hash_password(new_pw: str, config) -> str:
+    """Hash new_pw if provided; keep existing stored value if blank."""
+    if not new_pw:
+        return config.web.get('password', '')
+    if _is_hash(new_pw):
+        return new_pw
+    return generate_password_hash(new_pw)
+
+
 def _bool(form, key):
     return key in form and form[key] in ('on', '1', 'true', 'yes')
 
@@ -604,7 +652,7 @@ def _apply_settings(form, config):
         },
         'web': {
             'port': _int(form, 'web_port', 8080),
-            'password': form.get('web_password', ''),
+            'password': _hash_password(form.get('web_password', ''), config),
             'secret_key': form.get('web_secret_key') or config.web.get('secret_key', ''),
         },
     }

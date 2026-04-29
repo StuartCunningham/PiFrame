@@ -559,7 +559,7 @@
         <div class="col-12 col-md-5">
           <label class="form-label">Password <span class="text-secondary">(blank = no login)</span></label>
           <input class="form-control" type="password" name="web_password"
-                 value="{{ config.web.password }}"
+                 placeholder="Leave blank to keep current password"
                  autocomplete="new-password">
         </div>
         <div class="col-12 mt-3 border-top pt-3">
@@ -572,8 +572,16 @@
                     onclick="rebootPi()">
               <i class="bi bi-power"></i> Reboot Pi
             </button>
+            <button type="button" class="btn btn-outline-success btn-sm"
+                    id="btn-update" onclick="updateFromGitHub()">
+              <i class="bi bi-cloud-download"></i> Update from GitHub
+            </button>
           </div>
           <div class="form-text">Restart applies service changes. Reboot restarts the whole Pi.</div>
+          <div id="update-output" class="mt-2" style="display:none">
+            <pre id="update-pre" class="bg-dark text-light rounded p-2 small mb-1" style="max-height:200px;overflow-y:auto"></pre>
+            <div id="update-msg" class="small"></div>
+          </div>
         </div>
 
         <div class="col-12">
@@ -793,6 +801,38 @@
   async function rebootPi() {
     if (!confirm('Reboot the Pi? This will take about 30 seconds.')) return;
     await fetch('/api/system/reboot', {method: 'POST'});
+  }
+
+  // ── GitHub update ──────────────────────────────────────────────────────────
+  async function updateFromGitHub() {
+    const btn = document.getElementById('btn-update');
+    const out = document.getElementById('update-output');
+    const pre = document.getElementById('update-pre');
+    const msg = document.getElementById('update-msg');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pulling…';
+    out.style.display = 'none';
+    try {
+      const resp = await fetch('/api/system/update', {method: 'POST'});
+      const data = await resp.json();
+      const text = [data.stdout, data.stderr].filter(Boolean).join('\n').trim();
+      pre.textContent = text || '(no output)';
+      out.style.display = '';
+      if (!data.ok) {
+        msg.innerHTML = `<span class="text-danger">Update failed. ${data.error || ''}</span>`;
+      } else if (data.changed) {
+        msg.innerHTML = '<span class="text-success">Changes pulled — restart PiFrame to apply.</span>';
+      } else {
+        msg.innerHTML = '<span class="text-secondary">Already up to date.</span>';
+      }
+    } catch (e) {
+      out.style.display = '';
+      pre.textContent = String(e);
+      msg.innerHTML = '<span class="text-danger">Request failed.</span>';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-cloud-download"></i> Update from GitHub';
+    }
   }
 </script>
 {% endblock %}

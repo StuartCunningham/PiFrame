@@ -47,14 +47,14 @@ def main():
     # ── Web UI ─────────────────────────────────────────────────────────────────
     if config.web.get('enabled', True):
         try:
+            import waitress
             from piframe.web import create_app
             app = create_app(config, state, sync)
             host = config.web.get('host', '0.0.0.0')
             port = config.web.get('port', 8080)
 
             web_thread = threading.Thread(
-                target=lambda: app.run(host=host, port=port,
-                                       use_reloader=False, debug=False),
+                target=lambda: waitress.serve(app, host=host, port=port, threads=4),
                 daemon=True,
                 name='web-ui',
             )

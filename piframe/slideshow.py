@@ -72,7 +72,9 @@ def _load_image(path: str, size: tuple, fit_mode: str, bg_color: tuple,
         canvas.paste(img, (cx, cy))
         img = canvas
 
-    else:  # center
+    else:  # center (unknown fit_mode values fall here)
+        if fit_mode not in ('center', ''):
+            _log.warning('Unknown fit_mode %r, falling back to center', fit_mode)
         canvas = Image.new('RGB', (tw, th), bg_color)
         paste_x = max(0, (tw - iw) // 2)
         paste_y = max(0, (th - ih) // 2)

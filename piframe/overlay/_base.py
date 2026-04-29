@@ -96,7 +96,12 @@ def draw_text_with_bg(
 
     vert, horiz = position.split('-')
     pad = _PADDING
-    y0 = pad if vert == 'top' else h - block_h - pad
+    if vert == 'top':
+        y0 = pad
+    elif vert == 'center':
+        y0 = (h - block_h) // 2
+    else:
+        y0 = h - block_h - pad
     if horiz == 'left':
         x0 = pad
     elif horiz == 'right':

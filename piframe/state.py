@@ -1,6 +1,7 @@
 """Shared mutable state accessed by the slideshow, web app, and sync threads."""
 import json
 import os
+import queue
 import threading
 from datetime import datetime
 
@@ -14,7 +15,7 @@ class State:
         self._photo_index: int = 0
         self._current_photo: str = ''
         self._paused: bool = False
-        self._command: str | None = None   # 'next' | 'prev' | 'reload'
+        self._command_queue: queue.Queue = queue.Queue(maxsize=4)
 
         # OneDrive
         self._sync_status: str = 'Never synced'
@@ -69,14 +70,16 @@ class State:
             self._paused = value
 
     def send_command(self, cmd: str):
-        with self._lock:
-            self._command = cmd
+        try:
+            self._command_queue.put_nowait(cmd)
+        except queue.Full:
+            pass
 
     def pop_command(self) -> str | None:
-        with self._lock:
-            cmd = self._command
-            self._command = None
-            return cmd
+        try:
+            return self._command_queue.get_nowait()
+        except queue.Empty:
+            return None
 
     @property
     def total_photos(self):
