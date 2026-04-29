@@ -53,5 +53,6 @@ class PhotoInfoOverlay:
             image, lines, [font] * len(lines), color,
             position=cfg['position'],
             shadow=cfg.get('shadow', True),
-            bg=False,
+            bg=cfg.get('background', False),
+            bg_opacity=cfg.get('background_opacity', 120),
         )

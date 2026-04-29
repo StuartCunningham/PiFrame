@@ -43,6 +43,7 @@ _DEFAULTS = {
         'weather': {
             'enabled': False, 'api_key': '', 'location': '',
             'units': 'metric', 'position': 'bottom-left', 'show_icon': True,
+            'show_humidity': False,
             'font_size': 40, 'color': [255, 255, 255], 'shadow': True,
             'background': True, 'background_opacity': 120,
             'update_interval': 1800, 'font': '',
@@ -50,7 +51,8 @@ _DEFAULTS = {
         'photo_info': {
             'enabled': False, 'show_filename': False, 'show_date_taken': True,
             'position': 'bottom-center', 'font_size': 30,
-            'color': [220, 220, 220], 'shadow': True, 'font': '',
+            'color': [220, 220, 220], 'shadow': True, 'background': False,
+            'background_opacity': 120, 'font': '',
         },
     },
     'schedule': {

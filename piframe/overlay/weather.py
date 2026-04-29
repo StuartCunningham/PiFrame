@@ -42,7 +42,10 @@ class WeatherOverlay:
         desc = data.get('description', '').capitalize()
         icon_code = data.get('icon', '01')[:2]
 
-        line = f"{_ICON_MAP.get(icon_code, '')} {temp}{degree}  {desc}".strip()
+        parts = [f"{_ICON_MAP.get(icon_code, '')} {temp}{degree}  {desc}".strip()]
+        if cfg.get('show_humidity') and 'humidity' in data:
+            parts[0] += f"  💧{data['humidity']}%"
+        line = parts[0]
 
         family = cfg.get('font') or self._config.get('fonts', 'global', default='dejavu-bold')
         font = get_font(cfg['font_size'], family)

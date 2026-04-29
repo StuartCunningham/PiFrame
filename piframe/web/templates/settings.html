@@ -415,6 +415,28 @@
           <input class="form-control form-control-color w-100" type="color" name="weather_color"
                  value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
         </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">BG opacity</label>
+          <input class="form-control" type="number" name="weather_bg_opacity"
+                 min="0" max="255" value="{{ config.overlays.weather.background_opacity }}">
+        </div>
+        <div class="col-12 d-flex gap-4 flex-wrap">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="weather_shadow" name="weather_shadow"
+                   {% if config.overlays.weather.shadow %}checked{% endif %}>
+            <label class="form-check-label" for="weather_shadow">Drop shadow</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="weather_background" name="weather_background"
+                   {% if config.overlays.weather.background %}checked{% endif %}>
+            <label class="form-check-label" for="weather_background">Background pill</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="weather_show_humidity" name="weather_show_humidity"
+                   {% if config.overlays.weather.get('show_humidity') %}checked{% endif %}>
+            <label class="form-check-label" for="weather_show_humidity">Show humidity</label>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -446,6 +468,17 @@
           <label class="form-label">Font</label>
           {{ font_select('info_font', config.overlays.photo_info.get('font', '')) }}
         </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">Text colour</label>
+          {% set c = config.overlays.photo_info.color %}
+          <input class="form-control form-control-color w-100" type="color" name="info_color"
+                 value="#{{ '%02x%02x%02x' % (c[0], c[1], c[2]) }}">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label">BG opacity</label>
+          <input class="form-control" type="number" name="info_bg_opacity"
+                 min="0" max="255" value="{{ config.overlays.photo_info.get('background_opacity', 120) }}">
+        </div>
         <div class="col-12 d-flex gap-4 flex-wrap">
           <div class="form-check form-switch">
             <input class="form-check-input" type="checkbox" id="info_show_date" name="info_show_date"
@@ -461,6 +494,11 @@
             <input class="form-check-input" type="checkbox" id="info_shadow" name="info_shadow"
                    {% if config.overlays.photo_info.shadow %}checked{% endif %}>
             <label class="form-check-label" for="info_shadow">Drop shadow</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="info_background" name="info_background"
+                   {% if config.overlays.photo_info.get('background') %}checked{% endif %}>
+            <label class="form-check-label" for="info_background">Background pill</label>
           </div>
         </div>
       </div>
