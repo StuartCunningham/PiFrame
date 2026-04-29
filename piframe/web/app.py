@@ -387,7 +387,12 @@ def create_app(config, state, sync=None):
     @app.route('/library')
     @login_required
     def library():
-        return render_template('library.html', config=config, state=state)
+        cfg = config.slideshow
+        img_exts = cfg.get('supported_formats', [])
+        vid_exts = cfg.get('video', {}).get('formats', [])
+        upload_accept = ','.join(f'.{e.lower()}' for e in img_exts + vid_exts)
+        return render_template('library.html', config=config, state=state,
+                               upload_accept=upload_accept)
 
     @app.route('/api/library')
     @login_required
@@ -449,6 +454,47 @@ def create_app(config, state, sync=None):
         if not data:
             abort(404)
         return send_file(io.BytesIO(data), mimetype='image/jpeg')
+
+    @app.route('/api/library/upload', methods=['POST'])
+    @login_required
+    def api_library_upload():
+        from werkzeug.utils import secure_filename
+        cfg = config.slideshow
+        photo_dir = Path(cfg['photo_dir']).resolve()
+        if not photo_dir.exists():
+            return jsonify({'ok': False, 'error': 'Photo directory does not exist'}), 400
+
+        img_exts = {f'.{e.lower()}' for e in cfg.get('supported_formats', [])}
+        vid_exts = {f'.{e.lower()}' for e in cfg.get('video', {}).get('formats', [])}
+        allowed = img_exts | vid_exts
+
+        uploads = request.files.getlist('files')
+        if not uploads or all(not f.filename for f in uploads):
+            return jsonify({'ok': False, 'error': 'No files provided'}), 400
+
+        saved, errors = [], []
+        for f in uploads:
+            name = secure_filename(f.filename or '')
+            if not name:
+                errors.append({'name': f.filename, 'error': 'Invalid filename'})
+                continue
+            ext = Path(name).suffix.lower()
+            if ext not in allowed:
+                errors.append({'name': name, 'error': f'Unsupported format ({ext})'})
+                continue
+            dest = photo_dir / name
+            if dest.exists():
+                stem, counter = Path(name).stem, 1
+                while dest.exists():
+                    dest = photo_dir / f'{stem}_{counter}{ext}'
+                    counter += 1
+            try:
+                f.save(str(dest))
+                saved.append(dest.name)
+            except Exception as exc:
+                errors.append({'name': name, 'error': str(exc)})
+
+        return jsonify({'ok': True, 'saved': saved, 'errors': errors})
 
     @app.route('/api/media/info')
     @login_required

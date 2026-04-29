@@ -289,6 +289,17 @@
       <input type="search" class="form-control form-control-sm" id="lib-search"
              placeholder="Search…" style="max-width:220px;" oninput="filterLibrary()">
       <span class="text-secondary small ms-auto" id="lib-count"></span>
+      <label class="btn btn-sm btn-outline-primary flex-shrink-0" for="upload-input">
+        <i class="bi bi-upload"></i> Upload
+      </label>
+      <input type="file" id="upload-input" multiple
+             accept="{{ upload_accept }}" style="display:none"
+             onchange="startUpload(this)">
+    </div>
+
+    <!-- Upload status -->
+    <div id="upload-status" class="alert py-2 px-3 small flex-shrink-0 mb-2" style="display:none;">
+      <span id="upload-msg"></span>
     </div>
 
     <!-- Thumbnail grid -->
@@ -839,6 +850,54 @@ function fmtSize(b) {
   if (b >= 1e9) return (b / 1e9).toFixed(1) + ' GB';
   if (b >= 1e6) return (b / 1e6).toFixed(1) + ' MB';
   return Math.round(b / 1e3) + ' KB';
+}
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+
+async function startUpload(input) {
+  const files = [...input.files];
+  input.value = '';
+  if (!files.length) return;
+
+  const statusEl = document.getElementById('upload-status');
+  const msgEl    = document.getElementById('upload-msg');
+  let _hideTimer = null;
+
+  function showStatus(cls, html) {
+    statusEl.className = `alert ${cls} py-2 px-3 small flex-shrink-0 mb-2`;
+    msgEl.innerHTML = html;
+    statusEl.style.display = '';
+    if (_hideTimer) clearTimeout(_hideTimer);
+    if (cls !== 'alert-info') _hideTimer = setTimeout(() => { statusEl.style.display = 'none'; }, 5000);
+  }
+
+  showStatus('alert-info',
+    `<span class="spinner-border spinner-border-sm me-2"></span>` +
+    `Uploading ${files.length} file${files.length > 1 ? 's' : ''}…`);
+
+  const fd = new FormData();
+  for (const f of files) fd.append('files', f);
+
+  try {
+    const r = await fetch('/api/library/upload', {method: 'POST', body: fd});
+    const d = await r.json();
+    const nSaved = (d.saved || []).length;
+    const nErr   = (d.errors || []).length;
+    if (!d.ok && !nSaved) {
+      showStatus('alert-danger', d.error || 'Upload failed.');
+    } else if (nSaved) {
+      const errNote = nErr ? ` ${nErr} file${nErr > 1 ? 's' : ''} rejected.` : '';
+      showStatus('alert-success',
+        `<i class="bi bi-check-circle-fill me-1"></i>` +
+        `${nSaved} file${nSaved > 1 ? 's' : ''} uploaded.${errNote}`);
+      loadLibrary(true);
+    } else {
+      const firstErr = d.errors && d.errors[0] ? ` ${d.errors[0].error}` : '';
+      showStatus('alert-danger', `Upload rejected.${firstErr}`);
+    }
+  } catch (e) {
+    showStatus('alert-danger', 'Upload request failed.');
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
