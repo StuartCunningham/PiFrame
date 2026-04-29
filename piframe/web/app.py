@@ -356,6 +356,25 @@ def create_app(config, state, sync=None):
         buf = get_buffer()
         return jsonify({'entries': buf.since(since), 'seq': buf.latest_seq()})
 
+    @app.route('/api/logs/download')
+    @login_required
+    def api_logs_download():
+        import datetime
+        from piframe.logbuffer import get_buffer
+        buf = get_buffer()
+        entries = buf.since(0)
+        date_str = datetime.date.today().isoformat()
+        lines = [f'# PiFrame log — {date_str}', '']
+        for e in entries:
+            lines.append(f"{e['t']}  {e['level']:<8}  {e['name']} — {e['msg']}")
+        content = '\n'.join(lines) + '\n'
+        from flask import Response
+        return Response(
+            content,
+            mimetype='text/plain',
+            headers={'Content-Disposition': f'attachment; filename="piframe-{date_str}.log"'},
+        )
+
     @app.route('/api/sync', methods=['POST'])
     @login_required
     def api_sync():
